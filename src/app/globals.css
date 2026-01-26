@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 20% 98%;
+  --foreground: 220 10% 15%;
+  --border: 220 13% 91%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+    overscroll-behavior-y: none;
+  }
+
+  input,
+  textarea,
+  select {
+    @apply text-base;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  button {
+    @apply min-h-touch min-w-touch;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  .calendar-cell {
+    @apply w-full h-16 sm:h-12 md:w-12 md:h-12 flex items-center justify-center border rounded-lg transition-all active:scale-95;
+  }
+
+  .calendar-cell-available {
+    @apply bg-white border-gray-300 active:bg-green-50 active:border-green-500;
+  }
+
+  .calendar-cell-booked {
+    @apply bg-red-50 border-red-300 opacity-60 cursor-not-allowed;
+  }
+
+  .calendar-cell-selected {
+    @apply bg-blue-200 border-blue-500;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white px-6 py-3 rounded-lg font-medium active:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-touch;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-primary border-2 border-primary px-6 py-3 rounded-lg font-medium active:bg-gray-50 transition-colors min-h-touch;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-md p-4 sm:p-6;
+  }
+
+  .badge-pending {
+    @apply bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2;
+  }
+
+  .badge-confirmed {
+    @apply bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .fixed-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+}
