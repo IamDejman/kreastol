@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useRef } from "react";
+import { useState, Fragment, useRef, useEffect } from "react";
 import {
   format,
   addMonths,
@@ -45,6 +45,15 @@ export function MobileCalendar({
 
   useCalendarSync();
   const bookedDates = useBookingStore((s) => s.bookedDates);
+  const bookings = useBookingStore((s) => s.bookings);
+  const fetchBookings = useBookingStore((s) => s.fetchBookings);
+
+  // Ensure bookings are loaded
+  useEffect(() => {
+    if (bookings.length === 0) {
+      fetchBookings();
+    }
+  }, [bookings.length, fetchBookings]);
 
   const start = startOfMonth(base);
   const end = endOfMonth(base);
@@ -128,15 +137,54 @@ export function MobileCalendar({
     return "available";
   };
 
-  const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
+  const REVENUE_COLUMN_WIDTH = 100;
+  const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH + REVENUE_COLUMN_WIDTH;
+
+  // Calculate daily revenue
+  const getDailyRevenue = (dateStr: string): number => {
+    return bookings
+      .filter((booking) => {
+        // Check if date falls within booking range (excluding checkout date)
+        const date = parseISO(dateStr);
+        const checkIn = parseISO(booking.checkIn);
+        const checkOut = parseISO(booking.checkOut);
+        // Include check-in date, exclude check-out date
+        return date >= checkIn && date < checkOut;
+      })
+      .reduce((sum, booking) => {
+        // Calculate daily portion of booking amount
+        const dailyAmount = booking.nights > 0 ? booking.totalAmount / booking.nights : 0;
+        return sum + dailyAmount;
+      }, 0);
+  };
+
+  // Calculate total monthly revenue
+  const getTotalRevenue = (): number => {
+    return days.reduce((sum, day) => {
+      const dateStr = format(day, "yyyy-MM-dd");
+      return sum + getDailyRevenue(dateStr);
+    }, 0);
+  };
 
   const handleCellMouseEnter = (roomNumber: number, date: string) => {
     // Track hovered cell for showing cues - set immediately for all cells
     setHoveredCell({ room: roomNumber, date });
   };
 
+  const handleCellTouchStart = (e: React.TouchEvent, roomNumber: number, date: string) => {
+    // Track touched cell for showing cues on mobile
+    setHoveredCell({ room: roomNumber, date });
+  };
+
   const handleGridMouseLeave = () => {
     setHoveredCell(null);
+  };
+
+  const handleCellTouchEnd = () => {
+    // Keep cue visible briefly after touch ends
+    setTimeout(() => {
+      setHoveredCell(null);
+    }, 500);
   };
 
   return (
@@ -232,8 +280,8 @@ export function MobileCalendar({
           className="grid border-t border-gray-200"
           style={{
             width: gridWidth,
-            gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
-            gridTemplateRows: `56px repeat(${days.length}, 56px)`,
+            gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px) ${REVENUE_COLUMN_WIDTH}px`,
+            gridTemplateRows: `56px repeat(${days.length + 1}, 56px)`,
           }}
         >
           {/* Top-left corner */}
@@ -245,10 +293,7 @@ export function MobileCalendar({
           {ROOM_CONFIG.rooms.map((room, roomIndex) => (
             <div
               key={room.number}
-              className={cn(
-                "sticky top-0 z-10 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-3",
-                roomIndex === ROOM_CONFIG.rooms.length - 1 && "border-r-0"
-              )}
+              className="sticky top-0 z-10 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-3"
             >
               <span className="text-sm font-medium text-foreground">
                 {room.name}
@@ -258,6 +303,16 @@ export function MobileCalendar({
               </span>
             </div>
           ))}
+          
+          {/* Revenue header */}
+          <div className="sticky top-0 z-10 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-3">
+            <span className="text-sm font-medium text-foreground">
+              Revenue
+            </span>
+            <span className="text-xs text-gray-500">
+              Daily
+            </span>
+          </div>
 
           {/* Day rows */}
           {days.map((d, dayIndex) => {
@@ -301,7 +356,6 @@ export function MobileCalendar({
                     selectingRoom === room.number &&
                     dateStr > checkIn &&
                     dateStr < checkOut;
-                  const isLastCol = roomIndex === ROOM_CONFIG.rooms.length - 1;
                   const isHovered = hoveredCell?.room === room.number && hoveredCell?.date === dateStr;
                   // Show "check-in" cue when hovering before any selection
                   const showCheckInCue = isHovered && !checkIn && status === "available";
@@ -315,10 +369,11 @@ export function MobileCalendar({
                       disabled={status === "booked"}
                       onClick={() => handleCellClick(room.number, dateStr)}
                       onMouseEnter={() => handleCellMouseEnter(room.number, dateStr)}
+                      onTouchStart={(e) => handleCellTouchStart(e, room.number, dateStr)}
+                      onTouchEnd={handleCellTouchEnd}
                       className={cn(
                         "relative flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
                         isLastRow && "border-b-0",
-                        isLastCol && "border-r-0",
                         status === "booked" &&
                           "cursor-not-allowed bg-red-100",
                         status === "available" &&
@@ -339,9 +394,52 @@ export function MobileCalendar({
                     </button>
                   );
                 })}
+                
+                {/* Revenue cell for this day */}
+                <div
+                  className={cn(
+                    "flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-50 px-2",
+                    isLastRow && "border-b-0"
+                  )}
+                >
+                  <span className="text-sm font-semibold text-foreground">
+                    ₦{getDailyRevenue(dateStr).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </span>
+                </div>
               </Fragment>
             );
           })}
+          
+          {/* Total Revenue Row */}
+          <>
+            {/* Total label */}
+            <div className="sticky left-0 z-10 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-2">
+              <span className="text-sm font-semibold text-foreground">
+                TOTAL
+              </span>
+            </div>
+            
+            {/* Empty cells for rooms */}
+            {ROOM_CONFIG.rooms.map((room) => (
+              <div
+                key={room.number}
+                className="flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
+              />
+            ))}
+            
+            {/* Total revenue cell */}
+            <div className="flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-2">
+              <span className="text-sm font-bold text-foreground">
+                ₦{getTotalRevenue().toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+              </span>
+            </div>
+          </>
         </div>
       </div>
 

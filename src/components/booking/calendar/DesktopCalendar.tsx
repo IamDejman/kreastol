@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useRef } from "react";
+import { useState, Fragment, useRef, useEffect } from "react";
 import {
   format,
   subMonths,
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils/cn";
 
 const MIN_DAY_ROW_WIDTH = 80;
 const ROOM_COLUMN_WIDTH = 160;
+const REVENUE_COLUMN_WIDTH = 120;
 
 function formatOrdinalDate(date: Date): string {
   const day = date.getDate();
@@ -42,6 +43,15 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
 
   useCalendarSync();
   const bookedDates = useBookingStore((s) => s.bookedDates);
+  const bookings = useBookingStore((s) => s.bookings);
+  const fetchBookings = useBookingStore((s) => s.fetchBookings);
+
+  // Ensure bookings are loaded
+  useEffect(() => {
+    if (bookings.length === 0) {
+      fetchBookings();
+    }
+  }, [bookings.length, fetchBookings]);
 
   const start = startOfMonth(base);
   const end = endOfMonth(base);
@@ -178,7 +188,33 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
     setHoveredCell(null);
   };
 
-  const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
+  const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH + REVENUE_COLUMN_WIDTH;
+
+  // Calculate daily revenue
+  const getDailyRevenue = (dateStr: string): number => {
+    return bookings
+      .filter((booking) => {
+        // Check if date falls within booking range (excluding checkout date)
+        const date = parseISO(dateStr);
+        const checkIn = parseISO(booking.checkIn);
+        const checkOut = parseISO(booking.checkOut);
+        // Include check-in date, exclude check-out date
+        return date >= checkIn && date < checkOut;
+      })
+      .reduce((sum, booking) => {
+        // Calculate daily portion of booking amount
+        const dailyAmount = booking.nights > 0 ? booking.totalAmount / booking.nights : 0;
+        return sum + dailyAmount;
+      }, 0);
+  };
+
+  // Calculate total monthly revenue for all days in the month
+  const getTotalRevenue = (): number => {
+    return allDays.reduce((sum, day) => {
+      const dateStr = format(day, "yyyy-MM-dd");
+      return sum + getDailyRevenue(dateStr);
+    }, 0);
+  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
@@ -261,8 +297,8 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
           className="grid border-t border-gray-200"
           style={{
             width: gridWidth,
-            gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
-            gridTemplateRows: `48px repeat(${days.length}, 48px)`,
+            gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px) ${REVENUE_COLUMN_WIDTH}px`,
+            gridTemplateRows: `48px repeat(${days.length + 1}, 48px)`,
           }}
         >
           {/* Top-left corner */}
@@ -271,13 +307,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
           </div>
 
           {/* Room headers */}
-          {ROOM_CONFIG.rooms.map((room, roomIndex) => (
+          {ROOM_CONFIG.rooms.map((room) => (
             <div
               key={room.number}
-              className={cn(
-                "sticky top-0 z-10 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4",
-                roomIndex === ROOM_CONFIG.rooms.length - 1 && "border-r-0"
-              )}
+              className="sticky top-0 z-10 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4"
             >
               <span className="font-medium text-foreground">{room.name}</span>
               <span className="text-xs text-gray-500">
@@ -285,6 +318,12 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
               </span>
             </div>
           ))}
+          
+          {/* Revenue header */}
+          <div className="sticky top-0 z-10 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4">
+            <span className="font-medium text-foreground">Revenue</span>
+            <span className="text-xs text-gray-500">Daily</span>
+          </div>
 
           {/* Day rows */}
           {days.map((d, dayIndex) => {
@@ -316,7 +355,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                 </div>
 
                 {/* Room cells for this day */}
-                {ROOM_CONFIG.rooms.map((room, roomIndex) => {
+                {ROOM_CONFIG.rooms.map((room) => {
                   const status = getStatus(room.number, dateStr);
                   const isCheckIn =
                     selectingRoom === room.number && dateStr === checkIn;
@@ -334,7 +373,6 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                     !checkOut &&
                     selectingRoom === room.number &&
                     dateStr === hoveredDate;
-                  const isLastCol = roomIndex === ROOM_CONFIG.rooms.length - 1;
                   const isHovered = hoveredCell?.room === room.number && hoveredCell?.date === dateStr;
                   // Show "check-in" cue when hovering before any selection
                   const showCheckInCue = isHovered && !checkIn && status === "available";
@@ -353,7 +391,6 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                       className={cn(
                         "relative flex h-12 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors",
                         isLastRow && "border-b-0",
-                        isLastCol && "border-r-0",
                         status === "booked" &&
                           "cursor-not-allowed bg-red-100",
                         status === "available" &&
@@ -380,9 +417,52 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                     </button>
                   );
                 })}
+                
+                {/* Revenue cell for this day */}
+                <div
+                  className={cn(
+                    "flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-50 px-3",
+                    isLastRow && "border-b-0"
+                  )}
+                >
+                  <span className="text-sm font-semibold text-foreground">
+                    ₦{getDailyRevenue(dateStr).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </span>
+                </div>
               </Fragment>
             );
           })}
+          
+          {/* Total Revenue Row */}
+          <>
+            {/* Total label */}
+            <div className="sticky left-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
+              <span className="text-sm font-semibold text-foreground">
+                TOTAL
+              </span>
+            </div>
+            
+            {/* Empty cells for rooms */}
+            {ROOM_CONFIG.rooms.map((room) => (
+              <div
+                key={room.number}
+                className="flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
+              />
+            ))}
+            
+            {/* Total revenue cell */}
+            <div className="flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
+              <span className="text-sm font-bold text-foreground">
+                ₦{getTotalRevenue().toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+              </span>
+            </div>
+          </>
         </div>
       </div>
 
