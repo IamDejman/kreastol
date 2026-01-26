@@ -30,10 +30,13 @@ function BookingStatusPageContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const b = storageService.getBookingByCode(code);
-    setBooking(b);
-    setChecked(true);
-    if (!b) router.replace("/");
+    const loadBooking = async () => {
+      const b = await storageService.getBookingByCode(code);
+      setBooking(b);
+      setChecked(true);
+      if (!b) router.replace("/");
+    };
+    loadBooking();
   }, [code, router]);
 
   const handleCopyBookingCode = async () => {

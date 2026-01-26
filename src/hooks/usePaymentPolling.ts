@@ -13,8 +13,8 @@ export function usePaymentPolling(bookingCode: string, shouldPoll: boolean = fal
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const isVisible = useVisibilityChange();
 
-  const checkPayment = useCallback(() => {
-    const result = paymentService.verifyPayment(bookingCode);
+  const checkPayment = useCallback(async () => {
+    const result = await paymentService.verifyPayment(bookingCode);
     setPaymentStatus(result);
     setLastChecked(new Date());
   }, [bookingCode]);

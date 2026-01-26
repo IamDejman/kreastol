@@ -20,7 +20,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
   login: async (credentials) => {
     set({ isLoading: true, error: null });
     try {
-      const user = authService.login(credentials);
+      const user = await authService.login(credentials);
       set({ user, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";

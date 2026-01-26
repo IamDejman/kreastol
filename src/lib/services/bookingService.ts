@@ -7,8 +7,8 @@ import {
   getMockBankDetails,
 } from "@/lib/utils/generators";
 
-export function getBookedDates(): Record<number, string[]> {
-  const bookings = storageService.getBookings();
+export async function getBookedDates(): Promise<Record<number, string[]>> {
+  const bookings = await storageService.getBookings();
   const result: Record<number, string[]> = {};
 
   for (let r = 1; r <= ROOM_CONFIG.totalRooms; r++) {
@@ -30,22 +30,23 @@ export function getBookedDates(): Record<number, string[]> {
   return result;
 }
 
-function isRoomAvailable(
+async function isRoomAvailable(
   roomNumber: number,
   checkIn: string,
   checkOut: string
-): boolean {
-  const booked = getBookedDates()[roomNumber] ?? [];
+): Promise<boolean> {
+  const booked = await getBookedDates();
   const range = getDatesInRange(checkIn, checkOut);
-  return !range.some((d) => booked.includes(d));
+  return !range.some((d) => booked[roomNumber]?.includes(d));
 }
 
-export function createBooking(
+export async function createBooking(
   selection: DateSelection,
   formData: BookingFormData
-): Booking {
+): Promise<Booking> {
   const { roomNumber, checkIn, checkOut } = selection;
-  if (!isRoomAvailable(roomNumber, checkIn, checkOut)) {
+  const available = await isRoomAvailable(roomNumber, checkIn, checkOut);
+  if (!available) {
     throw new Error("Selected dates are no longer available.");
   }
 
@@ -78,14 +79,13 @@ export function createBooking(
     updatedAt: now,
   };
 
-  storageService.saveBooking(booking);
+  await storageService.saveBooking(booking);
   return booking;
 }
 
-export function getBookingsByRoom(roomNumber: number): Booking[] {
-  return storageService
-    .getBookings()
-    .filter((b) => b.roomNumber === roomNumber);
+export async function getBookingsByRoom(roomNumber: number): Promise<Booking[]> {
+  const bookings = await storageService.getBookings();
+  return bookings.filter((b) => b.roomNumber === roomNumber);
 }
 
 export const bookingService = {

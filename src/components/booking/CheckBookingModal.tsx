@@ -30,10 +30,10 @@ export function CheckBookingModal({ isOpen, onClose }: CheckBookingModalProps) {
     defaultValues: { bookingCode: "", surname: "" },
   });
 
-  const onSubmit = (data: CheckBookingValues) => {
+  const onSubmit = async (data: CheckBookingValues) => {
     const code = data.bookingCode.trim();
     const surname = data.surname.trim().toLowerCase();
-    const b = storageService.getBookingByCode(code);
+    const b = await storageService.getBookingByCode(code);
     
     if (!b) {
       setError("bookingCode", { message: "No booking found for this code." });

@@ -4,9 +4,9 @@ import { PAYMENT_CONFIG } from "@/lib/constants/config";
 
 const createdTimestamps: Record<string, number> = {};
 
-function getCreatedAt(bookingCode: string): number {
+async function getCreatedAt(bookingCode: string): Promise<number> {
   if (!createdTimestamps[bookingCode]) {
-    const b = storageService.getBookingByCode(bookingCode);
+    const b = await storageService.getBookingByCode(bookingCode);
     createdTimestamps[bookingCode] = b
       ? new Date(b.createdAt).getTime()
       : Date.now();
@@ -14,8 +14,8 @@ function getCreatedAt(bookingCode: string): number {
   return createdTimestamps[bookingCode];
 }
 
-export function verifyPayment(bookingCode: string): PaymentVerification {
-  const booking = storageService.getBookingByCode(bookingCode);
+export async function verifyPayment(bookingCode: string): Promise<PaymentVerification> {
+  const booking = await storageService.getBookingByCode(bookingCode);
   if (!booking) {
     return { status: "failed", message: "Booking not found." };
   }
@@ -33,12 +33,12 @@ export function verifyPayment(bookingCode: string): PaymentVerification {
     return { status: "failed", message: "Booking was cancelled." };
   }
 
-  const elapsed = Date.now() - getCreatedAt(bookingCode);
+  const elapsed = Date.now() - (await getCreatedAt(bookingCode));
   const delay = PAYMENT_CONFIG.autoConfirmDelay;
   const remaining = Math.max(0, Math.ceil((delay - elapsed) / 1000));
 
   if (elapsed >= delay) {
-    storageService.updateBooking(bookingCode, {
+    await storageService.updateBooking(bookingCode, {
       paymentStatus: "confirmed",
       paymentReference: `MOCK-${Date.now()}`,
       paymentDate: new Date().toISOString(),
@@ -58,15 +58,15 @@ export function verifyPayment(bookingCode: string): PaymentVerification {
   };
 }
 
-export function getPaymentAccount(bookingCode: string): {
+export async function getPaymentAccount(bookingCode: string): Promise<{
   accountNumber: string;
   bankName: string;
   accountName: string;
   expiresIn: string;
-} | null {
-  const booking = storageService.getBookingByCode(bookingCode);
+} | null> {
+  const booking = await storageService.getBookingByCode(bookingCode);
   if (!booking) return null;
-  const elapsed = Date.now() - getCreatedAt(bookingCode);
+  const elapsed = Date.now() - (await getCreatedAt(bookingCode));
   const remaining = Math.max(0, PAYMENT_CONFIG.autoConfirmDelay - elapsed);
   return {
     accountNumber: booking.accountNumber,

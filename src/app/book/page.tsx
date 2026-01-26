@@ -51,10 +51,10 @@ function BookPageContent() {
     if (!s) router.replace("/");
   }, [searchParams, router]);
 
-  const handleSubmit = (data: BookingFormValues) => {
+  const handleSubmit = async (data: BookingFormValues) => {
     if (!selection) return;
     try {
-      const booking = createBooking(selection, data);
+      const booking = await createBooking(selection, data);
       toast.success("Booking created. Complete payment to confirm.");
       router.push(`/booking/${booking.bookingCode}`);
     } catch (e) {

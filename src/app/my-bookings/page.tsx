@@ -17,7 +17,7 @@ import { format } from "date-fns";
 
 export default function MyBookingsPage() {
   const router = useRouter();
-  const [booking, setBooking] = useState<ReturnType<typeof storageService.getBookingByCode> | null>(null);
+  const [booking, setBooking] = useState<Awaited<ReturnType<typeof storageService.getBookingByCode>> | null>(null);
   const {
     register,
     handleSubmit,
@@ -28,10 +28,10 @@ export default function MyBookingsPage() {
     defaultValues: { bookingCode: "", surname: "" },
   });
 
-  const onSubmit = (data: CheckBookingValues) => {
+  const onSubmit = async (data: CheckBookingValues) => {
     const code = data.bookingCode.trim();
     const surname = data.surname.trim().toLowerCase();
-    const b = storageService.getBookingByCode(code);
+    const b = await storageService.getBookingByCode(code);
     
     if (!b) {
       setError("bookingCode", { message: "No booking found for this code." });

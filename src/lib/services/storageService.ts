@@ -1,61 +1,69 @@
 import type { Booking, User } from "@/types";
-import { STORAGE_KEYS, DEFAULT_USERS } from "@/lib/constants/config";
+import { STORAGE_KEYS } from "@/lib/constants/config";
+import { supabaseService } from "./supabaseService";
 
 class StorageService {
-  initializeStorage(): void {
-    if (typeof window === "undefined") return;
-
-    if (!localStorage.getItem(STORAGE_KEYS.users)) {
-      localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(DEFAULT_USERS));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.bookings)) {
-      localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify([]));
-    }
+  async initializeStorage(): Promise<void> {
+    // No longer needed - Supabase handles initialization
+    // But we can use this to seed default users if needed
+    return Promise.resolve();
   }
 
-  getBookings(): Booking[] {
-    if (typeof window === "undefined") return [];
-    const data = localStorage.getItem(STORAGE_KEYS.bookings);
-    return data ? JSON.parse(data) : [];
-  }
-
-  saveBooking(booking: Booking): void {
-    if (typeof window === "undefined") return;
-    const bookings = this.getBookings();
-    bookings.push(booking);
-    localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
-  }
-
-  updateBooking(bookingCode: string, updates: Partial<Booking>): void {
-    if (typeof window === "undefined") return;
-    const bookings = this.getBookings();
-    const index = bookings.findIndex((b) => b.bookingCode === bookingCode);
-    if (index !== -1) {
-      bookings[index] = {
-        ...bookings[index],
-        ...updates,
-        updatedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
+  async getBookings(): Promise<Booking[]> {
+    try {
+      return await supabaseService.getBookings();
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
+      return [];
     }
   }
 
-  getBookingByCode(bookingCode: string): Booking | null {
-    const bookings = this.getBookings();
-    return bookings.find((b) => b.bookingCode === bookingCode) || null;
+  async saveBooking(booking: Booking): Promise<void> {
+    try {
+      await supabaseService.saveBooking(booking);
+    } catch (error) {
+      console.error("Error saving booking:", error);
+      throw error;
+    }
   }
 
-  getUsers(): User[] {
-    if (typeof window === "undefined") return DEFAULT_USERS;
-    const data = localStorage.getItem(STORAGE_KEYS.users);
-    return data ? JSON.parse(data) : DEFAULT_USERS;
+  async updateBooking(bookingCode: string, updates: Partial<Booking>): Promise<void> {
+    try {
+      await supabaseService.updateBooking(bookingCode, updates);
+    } catch (error) {
+      console.error("Error updating booking:", error);
+      throw error;
+    }
   }
 
-  getUserByEmail(email: string): User | null {
-    const users = this.getUsers();
-    return users.find((u) => u.email === email) || null;
+  async getBookingByCode(bookingCode: string): Promise<Booking | null> {
+    try {
+      return await supabaseService.getBookingByCode(bookingCode);
+    } catch (error) {
+      console.error("Error fetching booking:", error);
+      return null;
+    }
   }
 
+  async getUsers(): Promise<User[]> {
+    try {
+      return await supabaseService.getUsers();
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    try {
+      return await supabaseService.getUserByEmail(email);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      return null;
+    }
+  }
+
+  // Current user session stays in localStorage for quick access
   setCurrentUser(user: User): void {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(user));
@@ -74,8 +82,9 @@ class StorageService {
 
   clearAllData(): void {
     if (typeof window === "undefined") return;
-    localStorage.clear();
-    this.initializeStorage();
+    // Only clear session data from localStorage
+    // Database data should be cleared via Supabase dashboard if needed
+    localStorage.removeItem(STORAGE_KEYS.currentUser);
   }
 }
 

@@ -15,8 +15,8 @@ function clearAuthCookie(): void {
   document.cookie = `${AUTH_COOKIE}=; path=/; max-age=0`;
 }
 
-export function login(credentials: LoginCredentials): User {
-  const user = storageService.getUserByEmail(credentials.email);
+export async function login(credentials: LoginCredentials): Promise<User> {
+  const user = await storageService.getUserByEmail(credentials.email);
   if (!user || user.password !== credentials.password) {
     throw new Error("Invalid email or password.");
   }

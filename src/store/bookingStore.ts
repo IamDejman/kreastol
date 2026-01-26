@@ -8,13 +8,13 @@ interface BookingStore {
   bookedDates: Record<number, string[]>;
   selectedDates: DateSelection | null;
   isLoading: boolean;
-  fetchBookings: () => void;
+  fetchBookings: () => Promise<void>;
   createBooking: (
     selection: DateSelection,
     formData: BookingFormData
-  ) => Booking;
+  ) => Promise<Booking>;
   selectDates: (selection: DateSelection | null) => void;
-  syncCalendar: () => void;
+  syncCalendar: () => Promise<void>;
   clearSelection: () => void;
 }
 
@@ -24,23 +24,40 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
   selectedDates: null,
   isLoading: false,
 
-  fetchBookings: () => {
-    const bookings = storageService.getBookings();
-    const bookedDates = bookingService.getBookedDates();
-    set({ bookings, bookedDates });
+  fetchBookings: async () => {
+    set({ isLoading: true });
+    try {
+      const bookings = await storageService.getBookings();
+      const bookedDates = await bookingService.getBookedDates();
+      set({ bookings, bookedDates, isLoading: false });
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
+      set({ isLoading: false });
+    }
   },
 
-  createBooking: (selection, formData) => {
-    const booking = bookingService.createBooking(selection, formData);
-    get().fetchBookings();
-    return booking;
+  createBooking: async (selection, formData) => {
+    set({ isLoading: true });
+    try {
+      const booking = await bookingService.createBooking(selection, formData);
+      await get().fetchBookings();
+      set({ isLoading: false });
+      return booking;
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
   },
 
   selectDates: (selection) => set({ selectedDates: selection }),
 
-  syncCalendar: () => {
-    const bookedDates = bookingService.getBookedDates();
-    set({ bookedDates });
+  syncCalendar: async () => {
+    try {
+      const bookedDates = await bookingService.getBookedDates();
+      set({ bookedDates });
+    } catch (error) {
+      console.error("Error syncing calendar:", error);
+    }
   },
 
   clearSelection: () => set({ selectedDates: null }),
