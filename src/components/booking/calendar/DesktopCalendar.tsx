@@ -21,6 +21,26 @@ import { cn } from "@/lib/utils/cn";
 const MIN_DAY_ROW_WIDTH = 80;
 const ROOM_COLUMN_WIDTH = 160;
 
+// Helper function to format ordinal dates (1st, 2nd, 3rd, etc.)
+function getOrdinalSuffix(day: number): string {
+  if (day > 3 && day < 21) return "th";
+  switch (day % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+}
+
+function formatOrdinalDate(date: Date): string {
+  const day = date.getDate();
+  return `${day}${getOrdinalSuffix(day)}`;
+}
+
 interface DesktopCalendarProps {
   onDateSelect: (selection: DateSelection) => void;
 }
@@ -262,10 +282,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         dateStr === today ? "text-primary" : "text-gray-500"
                       )}
                     >
-                      {format(d, "EEE")}
+                      {format(d, "EEE").toUpperCase()}
                     </span>
                     <span className="text-sm font-semibold text-foreground">
-                      {format(d, "d")}
+                      {formatOrdinalDate(d)}
                     </span>
                   </div>
                 </div>
@@ -305,7 +325,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isLastRow && "border-b-0",
                         isLastCol && "border-r-0",
                         status === "booked" &&
-                          "cursor-not-allowed bg-red-50/80 text-red-400",
+                          "cursor-not-allowed bg-red-50/80 text-red-600",
                         status === "available" &&
                           "bg-white text-foreground hover:bg-primary/10 hover:border-primary/30",
                         (status === "selecting" ||
@@ -322,7 +342,9 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
-                      {format(d, "d")}
+                      {status === "booked" ? (
+                        <span className="text-red-600 font-bold">X</span>
+                      ) : null}
                     </button>
                   );
                 })}
