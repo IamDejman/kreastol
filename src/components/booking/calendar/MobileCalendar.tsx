@@ -54,6 +54,7 @@ export function MobileCalendar({
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
+  const [visibleDaysCount, setVisibleDaysCount] = useState(6);
 
   useCalendarSync();
   const bookedDates = useBookingStore((s) => s.bookedDates);
@@ -62,7 +63,11 @@ export function MobileCalendar({
   const end = endOfMonth(base);
   const today = format(new Date(), "yyyy-MM-dd");
   const allDays = eachDayOfInterval({ start, end });
-  const days = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+  const allAvailableDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+  const days = allAvailableDays.slice(0, visibleDaysCount);
+  
+  const hasMoreDays = visibleDaysCount < allAvailableDays.length;
+  const canCollapse = visibleDaysCount > 6;
 
   const handleCellClick = (roomNumber: number, date: string) => {
     const roomDates = bookedDates[roomNumber] ?? [];
@@ -184,9 +189,8 @@ export function MobileCalendar({
       {/* Grid - transposed structure */}
       <div className="overflow-x-auto overflow-y-auto">
         <div
-          className="grid border-t border-gray-200"
+          className="grid border-t border-gray-200 w-fit"
           style={{
-            width: gridWidth,
             gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
             gridTemplateRows: `56px repeat(${days.length}, 56px)`,
           }}
@@ -267,7 +271,7 @@ export function MobileCalendar({
                         isLastRow && "border-b-0",
                         isLastCol && "border-r-0",
                         status === "booked" &&
-                          "cursor-not-allowed bg-red-100 text-red-600",
+                          "cursor-not-allowed bg-red-100",
                         status === "available" &&
                           "bg-green-100 text-green-700 active:bg-green-200",
                         (status === "selecting" ||
@@ -278,9 +282,6 @@ export function MobileCalendar({
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
-                      {status === "booked" ? (
-                        <span className="text-red-600 font-bold">X</span>
-                      ) : null}
                     </button>
                   );
                 })}
@@ -290,11 +291,31 @@ export function MobileCalendar({
         </div>
       </div>
 
-      {/* Instructions */}
-      <div className="border-t border-gray-200 px-4 py-3">
+      {/* Instructions and expand/collapse */}
+      <div className="border-t border-gray-200 px-4 py-3 space-y-2">
         <p className="text-xs text-gray-500">
           Tap a date to set check-in, then tap a later date to set check-out.
         </p>
+        <div className="flex gap-2">
+          {hasMoreDays && (
+            <button
+              type="button"
+              onClick={() => setVisibleDaysCount(allAvailableDays.length)}
+              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
+            >
+              See more dates ({visibleDaysCount}/{allAvailableDays.length})
+            </button>
+          )}
+          {canCollapse && (
+            <button
+              type="button"
+              onClick={() => setVisibleDaysCount(6)}
+              className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors min-h-touch min-w-touch"
+            >
+              Collapse
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

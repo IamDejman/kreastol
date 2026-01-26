@@ -69,6 +69,7 @@ export async function createBooking(
     guestName: formData.guestName,
     guestPhone: formData.guestPhone,
     guestEmail: formData.guestEmail,
+    // Payment account details - kept for type compatibility but not displayed
     accountNumber: bank.accountNumber,
     bankName: bank.bankName,
     accountName: bank.accountName,

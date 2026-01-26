@@ -51,6 +51,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const [visibleDaysCount, setVisibleDaysCount] = useState(6);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useCalendarSync();
@@ -60,7 +61,11 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const end = endOfMonth(base);
   const today = format(new Date(), "yyyy-MM-dd");
   const allDays = eachDayOfInterval({ start, end });
-  const days = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+  const allAvailableDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+  const days = allAvailableDays.slice(0, visibleDaysCount);
+  
+  const hasMoreDays = visibleDaysCount < allAvailableDays.length;
+  const canCollapse = visibleDaysCount > 6;
 
 
   const isRangeAvailable = (roomNumber: number, from: string, to: string) => {
@@ -235,9 +240,8 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
         onMouseLeave={handleGridMouseLeave}
       >
         <div
-          className="grid border-t border-gray-200"
+          className="grid border-t border-gray-200 w-fit"
           style={{
-            width: gridWidth,
             gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
             gridTemplateRows: `48px repeat(${days.length}, 48px)`,
           }}
@@ -325,7 +329,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isLastRow && "border-b-0",
                         isLastCol && "border-r-0",
                         status === "booked" &&
-                          "cursor-not-allowed bg-red-100 text-red-600",
+                          "cursor-not-allowed bg-red-100",
                         status === "available" &&
                           "bg-green-100 text-green-700 hover:bg-green-200 hover:border-green-300",
                         (status === "selecting" ||
@@ -342,9 +346,6 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
-                      {status === "booked" ? (
-                        <span className="text-red-600 font-bold">X</span>
-                      ) : null}
                     </button>
                   );
                 })}
@@ -354,10 +355,36 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
         </div>
       </div>
 
-      <p className="border-t border-gray-200 px-6 py-3 text-xs text-gray-500">
+      <div className="border-t border-gray-200 px-6 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-xs text-gray-500">
         Click a date to set check-in, then click a later date to set check-out.
         You’ll be taken to the booking page to complete your details.
       </p>
+          {(hasMoreDays || canCollapse) && (
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {hasMoreDays && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleDaysCount(allAvailableDays.length)}
+                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
+                >
+                  See more dates ({visibleDaysCount}/{allAvailableDays.length})
+                </button>
+              )}
+              {canCollapse && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleDaysCount(6)}
+                  className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors whitespace-nowrap"
+                >
+                  Collapse
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

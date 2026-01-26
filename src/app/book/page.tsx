@@ -55,7 +55,7 @@ function BookPageContent() {
     if (!selection) return;
     try {
       const booking = await createBooking(selection, data);
-      toast.success("Booking created. Complete payment to confirm.");
+      toast.success("Booking confirmed successfully!");
       router.push(`/booking/${booking.bookingCode}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Booking failed.");

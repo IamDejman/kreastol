@@ -42,8 +42,8 @@ export function MobileHeader() {
     <>
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-4 md:hidden">
         <Link href={isDashboardPage ? (user?.role === "owner" ? "/owner" : "/receptionist") : "/"}>
-          <span className="font-heading text-lg font-semibold text-primary">
-            {isDashboardPage ? HOTEL_INFO.name : "Kreastol"}
+          <span className="font-heading text-sm font-semibold text-primary sm:text-base md:text-lg">
+            {HOTEL_INFO.name}
           </span>
         </Link>
         {isDashboardPage && (

@@ -19,6 +19,10 @@ export function BookingConfirmation({ booking }: BookingConfirmationProps) {
         </p>
       </div>
       <p className="text-sm text-gray-600">
+        Your booking has been confirmed successfully.
+      </p>
+      {/* Payment section commented out */}
+      {/* <p className="text-sm text-gray-600">
         Pay <strong>{formatCurrency(booking.totalAmount)}</strong> to the
         account below. Your booking will be confirmed automatically once payment
         is received.
@@ -30,10 +34,10 @@ export function BookingConfirmation({ booking }: BookingConfirmationProps) {
         <p className="font-mono font-medium">{booking.accountNumber}</p>
         <p className="mt-2 text-xs text-gray-500">Account name</p>
         <p className="font-medium">{booking.accountName}</p>
-      </div>
+      </div> */}
       <Link href={`/booking/${booking.bookingCode}`} className="block">
         <Button fullWidth className="w-full">
-          View payment status
+          View booking details
         </Button>
       </Link>
     </div>

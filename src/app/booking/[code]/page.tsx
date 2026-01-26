@@ -165,8 +165,8 @@ function BookingStatusPageContent() {
             </div>
           </div>
 
-          {/* Payment Information */}
-          {booking.paymentReference && (
+          {/* Payment Information - commented out */}
+          {/* {booking.paymentReference && (
             <div className="rounded-lg border bg-white p-6 space-y-4">
               <h2 className="font-semibold text-foreground">Payment Information</h2>
               
@@ -182,7 +182,7 @@ function BookingStatusPageContent() {
                 </div>
               </div>
             </div>
-          )}
+          )} */}
         </div>
       </div>
     </div>
