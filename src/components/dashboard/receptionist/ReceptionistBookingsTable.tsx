@@ -20,8 +20,10 @@ export function ReceptionistBookingsTable({ bookings }: ReceptionistBookingsTabl
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-white">
-      <table className="w-full text-left text-sm">
+    <div className="relative overflow-x-auto rounded-xl border bg-white">
+      {/* Scroll indicator for mobile */}
+      <div className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none md:hidden" aria-hidden="true" />
+      <table className="w-full text-left text-sm min-w-[700px]">
         <thead>
           <tr className="border-b bg-gray-50">
             <th className="px-4 py-3 font-medium">Code</th>

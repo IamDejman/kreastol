@@ -101,6 +101,7 @@ export function BookingsFilterDropdown({
       const dropdown = dropdownRef.current;
       const dropdownWidth = 288; // w-72 = 288px
       const spacing = 8;
+      const isMobile = window.innerWidth < 768;
       
       // Position dropdown below the button
       let top = buttonRect.bottom + spacing;
@@ -108,18 +109,30 @@ export function BookingsFilterDropdown({
       
       // Adjust if dropdown would go off bottom of screen
       const dropdownHeight = dropdown.offsetHeight || 400;
-      if (top + dropdownHeight > window.innerHeight) {
-        top = buttonRect.top - dropdownHeight - spacing;
+      if (top + dropdownHeight > window.innerHeight - 16) {
+        top = Math.max(16, buttonRect.top - dropdownHeight - spacing);
       }
       
-      // Adjust if dropdown would go off right edge
-      if (right + dropdownWidth > window.innerWidth) {
-        right = window.innerWidth - dropdownWidth - 16;
-      }
-      
-      // Ensure it doesn't go off left edge
-      if (right < 16) {
-        right = 16;
+      // On mobile, prefer centering or aligning to button
+      if (isMobile) {
+        // Center horizontally if possible, otherwise align to button
+        const centerRight = (window.innerWidth - dropdownWidth) / 2;
+        if (centerRight >= 16 && centerRight + dropdownWidth <= window.innerWidth - 16) {
+          right = window.innerWidth - centerRight - dropdownWidth;
+        } else {
+          // Align to button, but ensure it doesn't go off screen
+          right = Math.max(16, Math.min(right, window.innerWidth - dropdownWidth - 16));
+        }
+      } else {
+        // Adjust if dropdown would go off right edge
+        if (right + dropdownWidth > window.innerWidth) {
+          right = window.innerWidth - dropdownWidth - 16;
+        }
+        
+        // Ensure it doesn't go off left edge
+        if (right < 16) {
+          right = 16;
+        }
       }
       
       dropdown.style.top = `${top}px`;
