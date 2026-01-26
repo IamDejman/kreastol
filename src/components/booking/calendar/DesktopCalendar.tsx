@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, Fragment, useRef, useEffect } from "react";
 import {
   format,
   subMonths,
@@ -18,7 +18,7 @@ import { useBookingStore } from "@/store/bookingStore";
 import { ROOM_CONFIG } from "@/lib/constants/config";
 import { cn } from "@/lib/utils/cn";
 
-const DAY_COLUMN_WIDTH = 40;
+const MIN_DAY_COLUMN_WIDTH = 32;
 const ROOM_COLUMN_WIDTH = 160;
 
 interface DesktopCalendarProps {
@@ -31,9 +31,47 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const [dayColumnWidth, setDayColumnWidth] = useState(MIN_DAY_COLUMN_WIDTH);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useCalendarSync();
   const bookedDates = useBookingStore((s) => s.bookedDates);
+
+  const start = startOfMonth(base);
+  const end = endOfMonth(base);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const allDays = eachDayOfInterval({ start, end });
+  const days = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+
+  // Calculate dynamic column width based on container width
+  useEffect(() => {
+    const calculateColumnWidth = () => {
+      if (!scrollContainerRef.current) return;
+      
+      const containerWidth = scrollContainerRef.current.clientWidth;
+      const availableWidth = containerWidth - ROOM_COLUMN_WIDTH;
+      const numDays = days.length;
+      
+      if (numDays > 0) {
+        const calculatedWidth = availableWidth / numDays;
+        const finalWidth = Math.max(MIN_DAY_COLUMN_WIDTH, calculatedWidth);
+        setDayColumnWidth(finalWidth);
+      }
+    };
+
+    // Use a small delay to ensure the container is rendered
+    const timeoutId = setTimeout(calculateColumnWidth, 0);
+
+    const handleResize = () => {
+      calculateColumnWidth();
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [base, days.length]);
 
   const isRangeAvailable = (roomNumber: number, from: string, to: string) => {
     const roomDates = bookedDates[roomNumber] ?? [];
@@ -46,12 +84,6 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
       return !roomDates.includes(str);
     });
   };
-
-  const start = startOfMonth(base);
-  const end = endOfMonth(base);
-  const today = format(new Date(), "yyyy-MM-dd");
-  const allDays = eachDayOfInterval({ start, end });
-  const days = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
 
   const handleCellClick = (roomNumber: number, date: string) => {
     const roomDates = bookedDates[roomNumber] ?? [];
@@ -139,7 +171,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
 
   const handleGridMouseLeave = () => setHoveredDate(null);
 
-  const gridWidth = ROOM_COLUMN_WIDTH + days.length * DAY_COLUMN_WIDTH;
+  const gridWidth = ROOM_COLUMN_WIDTH + days.length * dayColumnWidth;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -208,6 +240,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
 
       {/* Grid */}
       <div
+        ref={scrollContainerRef}
         className="overflow-x-auto"
         onMouseLeave={handleGridMouseLeave}
       >
@@ -215,7 +248,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
           className="grid border-t border-gray-200"
           style={{
             width: gridWidth,
-            gridTemplateColumns: `${ROOM_COLUMN_WIDTH}px repeat(${days.length}, ${DAY_COLUMN_WIDTH}px)`,
+            gridTemplateColumns: `${ROOM_COLUMN_WIDTH}px repeat(${days.length}, ${dayColumnWidth}px)`,
           }}
         >
           {/* Top-left corner */}
