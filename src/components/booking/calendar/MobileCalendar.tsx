@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, Fragment, useRef } from "react";
 import {
   format,
   addMonths,
@@ -55,6 +55,7 @@ export function MobileCalendar({
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [visibleDaysCount, setVisibleDaysCount] = useState(6);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useCalendarSync();
   const bookedDates = useBookingStore((s) => s.bookedDates);
@@ -187,7 +188,7 @@ export function MobileCalendar({
       )}
 
       {/* Grid - transposed structure */}
-      <div className="overflow-x-auto overflow-y-auto">
+      <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-auto">
         <div
           className="grid border-t border-gray-200 w-fit"
           style={{
@@ -309,7 +310,16 @@ export function MobileCalendar({
           {canCollapse && (
             <button
               type="button"
-              onClick={() => setVisibleDaysCount(6)}
+              onClick={() => {
+                setVisibleDaysCount(6);
+                // Scroll back to top of grid when collapsing
+                setTimeout(() => {
+                  if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                    scrollContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  }
+                }, 100);
+              }}
               className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors min-h-touch min-w-touch"
             >
               Collapse

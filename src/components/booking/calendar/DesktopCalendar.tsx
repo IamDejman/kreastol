@@ -375,7 +375,16 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
               {canCollapse && (
                 <button
                   type="button"
-                  onClick={() => setVisibleDaysCount(6)}
+                  onClick={() => {
+                    setVisibleDaysCount(6);
+                    // Scroll back to top of grid when collapsing
+                    setTimeout(() => {
+                      if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                        scrollContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                      }
+                    }, 100);
+                  }}
                   className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors whitespace-nowrap"
                 >
                   Collapse
