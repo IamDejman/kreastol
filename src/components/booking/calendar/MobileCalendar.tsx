@@ -18,7 +18,7 @@ import { useBookingStore } from "@/store/bookingStore";
 import { ROOM_CONFIG } from "@/lib/constants/config";
 import { cn } from "@/lib/utils/cn";
 
-const DAY_COLUMN_WIDTH = 48; // Slightly larger for mobile touch targets
+const MIN_DAY_ROW_WIDTH = 70; // Width for day label column
 const ROOM_COLUMN_WIDTH = 120; // Smaller for mobile
 
 interface MobileCalendarProps {
@@ -99,7 +99,7 @@ export function MobileCalendar({
     return "available";
   };
 
-  const gridWidth = ROOM_COLUMN_WIDTH + days.length * DAY_COLUMN_WIDTH;
+  const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -161,93 +161,110 @@ export function MobileCalendar({
         </div>
       )}
 
-      {/* Grid - same structure as desktop */}
-      <div className="overflow-x-auto">
+      {/* Grid - transposed structure */}
+      <div className="overflow-x-auto overflow-y-auto">
         <div
           className="grid border-t border-gray-200"
           style={{
             width: gridWidth,
-            gridTemplateColumns: `${ROOM_COLUMN_WIDTH}px repeat(${days.length}, ${DAY_COLUMN_WIDTH}px)`,
+            gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
+            gridTemplateRows: `auto repeat(${days.length}, 1fr)`,
           }}
         >
           {/* Top-left corner */}
-          <div className="sticky left-0 z-10 border-b border-r border-gray-200 bg-gray-50" />
+          <div className="sticky left-0 top-0 z-20 border-b border-r border-gray-200 bg-gray-50" />
 
-          {/* Day headers */}
-          {days.map((d, i) => (
+          {/* Room headers */}
+          {ROOM_CONFIG.rooms.map((room, roomIndex) => (
             <div
-              key={format(d, "yyyy-MM-dd")}
+              key={room.number}
               className={cn(
-                "flex items-center justify-center border-b border-r border-gray-200 bg-gray-50 py-2",
-                i === days.length - 1 && "border-r-0"
+                "sticky top-0 z-10 flex flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-3 py-2",
+                roomIndex === ROOM_CONFIG.rooms.length - 1 && "border-r-0"
               )}
             >
-              <span
-                className={cn(
-                  "text-xs font-medium uppercase",
-                  format(d, "yyyy-MM-dd") === today
-                    ? "text-primary"
-                    : "text-gray-500"
-                )}
-              >
-                {format(d, "EEE")}
+              <span className="text-sm font-medium text-foreground">
+                {room.name}
+              </span>
+              <span className="text-xs text-gray-500">
+                ₦{room.rate.toLocaleString()}/night
               </span>
             </div>
           ))}
 
-          {/* Room rows */}
-          {ROOM_CONFIG.rooms.map((room) => (
-            <Fragment key={room.number}>
-              <div className="sticky left-0 z-10 flex flex-col justify-center border-b border-r border-gray-200 bg-white px-3 py-3">
-                <span className="text-sm font-medium text-foreground">
-                  {room.name}
-                </span>
-                <span className="text-xs text-gray-500">
-                  ₦{room.rate.toLocaleString()}/night
-                </span>
-              </div>
-              {days.map((d, dayIndex) => {
-                const dateStr = format(d, "yyyy-MM-dd");
-                const status = getStatus(room.number, dateStr);
-                const isCheckIn =
-                  selectingRoom === room.number && dateStr === checkIn;
-                const isCheckOut =
-                  selectingRoom === room.number && dateStr === checkOut;
-                const isInRange =
-                  !!checkIn &&
-                  !!checkOut &&
-                  selectingRoom === room.number &&
-                  dateStr > checkIn &&
-                  dateStr < checkOut;
-                const isLastCol = dayIndex === days.length - 1;
+          {/* Day rows */}
+          {days.map((d, dayIndex) => {
+            const dateStr = format(d, "yyyy-MM-dd");
+            const isLastRow = dayIndex === days.length - 1;
 
-                return (
-                  <button
-                    key={dateStr}
-                    type="button"
-                    disabled={status === "booked"}
-                    onClick={() => handleCellClick(room.number, dateStr)}
-                    className={cn(
-                      "flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
-                      isLastCol && "border-r-0",
-                      status === "booked" &&
-                        "cursor-not-allowed bg-red-50/80 text-red-400",
-                      status === "available" &&
-                        "bg-white text-foreground active:bg-primary/10",
-                      (status === "selecting" ||
-                        status === "selected" ||
-                        isInRange) &&
-                        "bg-primary/15 text-primary border-primary/40",
-                      isCheckIn && "rounded-l-md bg-primary/20",
-                      isCheckOut && "rounded-r-md bg-primary/20"
-                    )}
-                  >
-                    {format(d, "d")}
-                  </button>
-                );
-              })}
-            </Fragment>
-          ))}
+            return (
+              <Fragment key={dateStr}>
+                {/* Day label */}
+                <div
+                  className={cn(
+                    "sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white px-2 py-2",
+                    isLastRow && "border-b-0"
+                  )}
+                >
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={cn(
+                        "text-xs font-medium uppercase",
+                        dateStr === today ? "text-primary" : "text-gray-500"
+                      )}
+                    >
+                      {format(d, "EEE")}
+                    </span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {format(d, "d")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Room cells for this day */}
+                {ROOM_CONFIG.rooms.map((room, roomIndex) => {
+                  const status = getStatus(room.number, dateStr);
+                  const isCheckIn =
+                    selectingRoom === room.number && dateStr === checkIn;
+                  const isCheckOut =
+                    selectingRoom === room.number && dateStr === checkOut;
+                  const isInRange =
+                    !!checkIn &&
+                    !!checkOut &&
+                    selectingRoom === room.number &&
+                    dateStr > checkIn &&
+                    dateStr < checkOut;
+                  const isLastCol = roomIndex === ROOM_CONFIG.rooms.length - 1;
+
+                  return (
+                    <button
+                      key={room.number}
+                      type="button"
+                      disabled={status === "booked"}
+                      onClick={() => handleCellClick(room.number, dateStr)}
+                      className={cn(
+                        "flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
+                        isLastRow && "border-b-0",
+                        isLastCol && "border-r-0",
+                        status === "booked" &&
+                          "cursor-not-allowed bg-red-50/80 text-red-400",
+                        status === "available" &&
+                          "bg-white text-foreground active:bg-primary/10",
+                        (status === "selecting" ||
+                          status === "selected" ||
+                          isInRange) &&
+                          "bg-primary/15 text-primary border-primary/40",
+                        isCheckIn && "rounded-t-md bg-primary/20",
+                        isCheckOut && "rounded-b-md bg-primary/20"
+                      )}
+                    >
+                      {format(d, "d")}
+                    </button>
+                  );
+                })}
+              </Fragment>
+            );
+          })}
         </div>
       </div>
 
