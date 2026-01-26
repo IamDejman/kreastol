@@ -111,17 +111,31 @@ function bookingToDbBooking(booking: Booking): Omit<DbBooking, "id" | "created_a
 export const supabaseService = {
   // Bookings
   async getBookings(): Promise<Booking[]> {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("*")
-      .order("created_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching bookings:", error);
-      throw new Error(`Failed to fetch bookings: ${error.message}`);
+      if (error) {
+        console.error("Error fetching bookings:", error);
+        // If it's a network error or table doesn't exist, return empty array
+        if (error.message?.includes("Failed to fetch") || error.message?.includes("relation") || error.code === "42P01") {
+          console.warn("Bookings table may not exist yet or network error. Returning empty array.");
+          return [];
+        }
+        throw new Error(`Failed to fetch bookings: ${error.message}`);
+      }
+
+      return (data || []).map(dbBookingToBooking);
+    } catch (error: any) {
+      // Handle network errors gracefully
+      if (error?.message?.includes("Failed to fetch") || error?.message?.includes("ERR_NAME_NOT_RESOLVED")) {
+        console.warn("Network error fetching bookings. Check your Supabase connection and ensure the project is active.");
+        return [];
+      }
+      throw error;
     }
-
-    return (data || []).map(dbBookingToBooking);
   },
 
   async saveBooking(booking: Booking): Promise<void> {

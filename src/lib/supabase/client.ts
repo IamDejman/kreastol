@@ -9,4 +9,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Validate URL format
+if (!supabaseUrl.startsWith("https://") || !supabaseUrl.includes(".supabase.co")) {
+  console.warn(
+    `Warning: Supabase URL format looks incorrect: ${supabaseUrl}. Expected format: https://[project-ref].supabase.co`
+  );
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false, // We're using custom auth
+  },
+});
