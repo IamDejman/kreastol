@@ -1,6 +1,7 @@
 import {
   format,
   addDays,
+  subDays,
   differenceInDays,
   isWithinInterval,
   startOfMonth,
@@ -27,7 +28,8 @@ export function getNights(checkIn: string, checkOut: string): number {
 
 export function getDatesInRange(checkIn: string, checkOut: string): string[] {
   const start = parseISO(checkIn);
-  const end = parseISO(checkOut);
+  // Exclude checkout date - only block dates from check-in up to (but not including) checkout
+  const end = subDays(parseISO(checkOut), 1);
   const days = eachDayOfInterval({ start, end });
   return days.map((d) => format(d, "yyyy-MM-dd"));
 }

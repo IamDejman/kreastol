@@ -2,6 +2,7 @@
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { MobileHeader } from "@/components/layout/MobileHeader";
 import { useAuthStore } from "@/store/authStore";
 
 export default function ReceptionistLayout({
@@ -13,6 +14,9 @@ export default function ReceptionistLayout({
 
   return (
     <ProtectedRoute>
+      <div className="md:hidden">
+        <MobileHeader />
+      </div>
       <div className="flex min-h-screen bg-gray-50">
         {user?.role === "receptionist" && <Sidebar role="receptionist" />}
         <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
