@@ -21,24 +21,9 @@ import { cn } from "@/lib/utils/cn";
 const MIN_DAY_ROW_WIDTH = 70; // Width for day label column
 const ROOM_COLUMN_WIDTH = 120; // Smaller for mobile
 
-// Helper function to format ordinal dates (1st, 2nd, 3rd, etc.)
-function getOrdinalSuffix(day: number): string {
-  if (day > 3 && day < 21) return "th";
-  switch (day % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
-  }
-}
-
 function formatOrdinalDate(date: Date): string {
   const day = date.getDate();
-  return `${day}${getOrdinalSuffix(day)}`;
+  return `${day}`;
 }
 
 interface MobileCalendarProps {
@@ -128,10 +113,13 @@ export function MobileCalendar({
   const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
       {/* Header with month nav */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-2">
+      <div 
+        className="flex items-center justify-between border-b border-gray-200 py-3 relative"
+        style={{ width: gridWidth }}
+      >
+        <div className="flex items-center gap-2 px-4">
           <button
             type="button"
             onClick={() => setBase((b) => subMonths(b, 1))}
@@ -176,11 +164,31 @@ export function MobileCalendar({
             </svg>
           </button>
         </div>
+        <div 
+          className="flex items-center gap-3 text-xs text-gray-500 px-3"
+          style={{ position: 'absolute', right: 0 }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5 rounded border border-gray-300 bg-green-100" />
+            <span className="hidden sm:inline">Available</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5 rounded border border-red-200 bg-red-50" />
+            <span className="hidden sm:inline">Booked</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3.5 w-3.5 rounded border border-gray-300 bg-primary/15" />
+            <span className="hidden sm:inline">Selected</span>
+          </span>
+        </div>
       </div>
 
       {/* Selection status */}
       {checkIn && !checkOut && selectingRoom && (
-        <div className="border-b bg-blue-50 px-4 py-2">
+        <div 
+          className="border-b bg-blue-50 px-4 py-2"
+          style={{ width: gridWidth }}
+        >
           <p className="text-xs font-medium text-blue-900">
             Select check-out date for {ROOM_CONFIG.rooms.find((r) => r.number === selectingRoom)?.name}
           </p>
@@ -190,8 +198,9 @@ export function MobileCalendar({
       {/* Grid - transposed structure */}
       <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-auto">
         <div
-          className="grid border-t border-gray-200 w-fit"
+          className="grid border-t border-gray-200"
           style={{
+            width: gridWidth,
             gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
             gridTemplateRows: `56px repeat(${days.length}, 56px)`,
           }}
@@ -293,7 +302,10 @@ export function MobileCalendar({
       </div>
 
       {/* Instructions and expand/collapse */}
-      <div className="border-t border-gray-200 px-4 py-3 space-y-2">
+      <div 
+        className="border-t border-gray-200 px-4 py-3 space-y-2"
+        style={{ width: gridWidth }}
+      >
         <p className="text-xs text-gray-500">
           Tap a date to set check-in, then tap a later date to set check-out.
         </p>

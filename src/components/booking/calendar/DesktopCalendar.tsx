@@ -21,24 +21,9 @@ import { cn } from "@/lib/utils/cn";
 const MIN_DAY_ROW_WIDTH = 80;
 const ROOM_COLUMN_WIDTH = 160;
 
-// Helper function to format ordinal dates (1st, 2nd, 3rd, etc.)
-function getOrdinalSuffix(day: number): string {
-  if (day > 3 && day < 21) return "th";
-  switch (day % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
-  }
-}
-
 function formatOrdinalDate(date: Date): string {
   const day = date.getDate();
-  return `${day}${getOrdinalSuffix(day)}`;
+  return `${day}`;
 }
 
 interface DesktopCalendarProps {
@@ -169,10 +154,13 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
       {/* Header with month nav */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center gap-3">
+      <div 
+        className="flex items-center justify-between border-b border-gray-200 py-4 relative"
+        style={{ width: gridWidth }}
+      >
+        <div className="flex items-center gap-3 px-6">
           <button
             type="button"
             onClick={() => setBase((b) => subMonths(b, 1))}
@@ -217,9 +205,12 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
             </svg>
           </button>
         </div>
-        <div className="flex items-center gap-4 text-xs text-gray-500">
+        <div 
+          className="flex items-center gap-4 text-xs text-gray-500 px-6"
+          style={{ position: 'absolute', right: 0 }}
+        >
           <span className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded border border-gray-300 bg-white" />
+            <span className="h-4 w-4 rounded border border-gray-300 bg-green-100" />
             Available
           </span>
           <span className="flex items-center gap-2">
@@ -227,7 +218,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
             Booked
           </span>
           <span className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded border-2 border-primary bg-primary/15" />
+            <span className="h-4 w-4 rounded border border-gray-300 bg-primary/15" />
             Selected
           </span>
         </div>
@@ -240,8 +231,9 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
         onMouseLeave={handleGridMouseLeave}
       >
         <div
-          className="grid border-t border-gray-200 w-fit"
+          className="grid border-t border-gray-200"
           style={{
+            width: gridWidth,
             gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
             gridTemplateRows: `48px repeat(${days.length}, 48px)`,
           }}
@@ -355,7 +347,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 px-6 py-3">
+      <div 
+        className="border-t border-gray-200 px-6 py-3"
+        style={{ width: gridWidth }}
+      >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-xs text-gray-500">
         Click a date to set check-in, then click a later date to set check-out.
