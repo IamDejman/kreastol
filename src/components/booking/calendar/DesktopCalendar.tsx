@@ -239,18 +239,18 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
           style={{
             width: gridWidth,
             gridTemplateColumns: `${MIN_DAY_ROW_WIDTH}px repeat(${ROOM_CONFIG.rooms.length}, ${ROOM_COLUMN_WIDTH}px)`,
-            gridTemplateRows: `auto repeat(${days.length}, 1fr)`,
+            gridTemplateRows: `48px repeat(${days.length}, 48px)`,
           }}
         >
           {/* Top-left corner */}
-          <div className="sticky left-0 top-0 z-20 border-b border-r border-gray-200 bg-gray-50" />
+          <div className="sticky left-0 top-0 z-20 h-12 border-b border-r border-gray-200 bg-gray-50" />
 
           {/* Room headers */}
           {ROOM_CONFIG.rooms.map((room, roomIndex) => (
             <div
               key={room.number}
               className={cn(
-                "sticky top-0 z-10 flex flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4 py-3",
+                "sticky top-0 z-10 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4",
                 roomIndex === ROOM_CONFIG.rooms.length - 1 && "border-r-0"
               )}
             >
@@ -271,7 +271,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                 {/* Day label */}
                 <div
                   className={cn(
-                    "sticky left-0 z-10 flex items-center justify-center border-b border-r border-gray-200 bg-white px-3 py-2",
+                    "sticky left-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-white px-3",
                     isLastRow && "border-b-0"
                   )}
                 >
@@ -325,9 +325,9 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isLastRow && "border-b-0",
                         isLastCol && "border-r-0",
                         status === "booked" &&
-                          "cursor-not-allowed bg-red-50/80 text-red-600",
+                          "cursor-not-allowed bg-red-100 text-red-600",
                         status === "available" &&
-                          "bg-white text-foreground hover:bg-primary/10 hover:border-primary/30",
+                          "bg-green-100 text-green-700 hover:bg-green-200 hover:border-green-300",
                         (status === "selecting" ||
                           status === "selected" ||
                           isInRange) &&
