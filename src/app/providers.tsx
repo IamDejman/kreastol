@@ -8,8 +8,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const checkAuth = useAuthStore((state) => state.checkAuth);
 
   useEffect(() => {
-    storageService.initializeStorage();
-    checkAuth();
+    try {
+      if (typeof window !== "undefined") {
+        storageService.initializeStorage();
+        checkAuth();
+      }
+    } catch (error) {
+      console.error("Error initializing app:", error);
+    }
   }, [checkAuth]);
 
   return <>{children}</>;
