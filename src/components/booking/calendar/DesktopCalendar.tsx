@@ -36,6 +36,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<{ room: number; date: string } | null>(null);
   const [visibleDaysCount, setVisibleDaysCount] = useState(6);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -81,13 +82,32 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
     const d = parseISO(date);
     const ci = parseISO(checkIn!);
 
-    if (isBefore(d, ci) || date === checkIn!) {
+    // Allow deselection: clicking on check-out deselects it
+    if (checkOut && date === checkOut) {
+      setCheckOut(null);
+      setHoveredDate(null);
+      setHoveredCell(null);
+      return;
+    }
+
+    // Allow deselection: clicking on check-in deselects everything
+    if (date === checkIn) {
+      setSelectingRoom(null);
+      setCheckIn(null);
+      setCheckOut(null);
+      setHoveredDate(null);
+      setHoveredCell(null);
+      return;
+    }
+
+    if (isBefore(d, ci)) {
       setCheckIn(date);
       setCheckOut(null);
       setHoveredDate(null);
     } else {
       setCheckOut(date);
       setHoveredDate(null);
+      setHoveredCell(null); // Clear hover cue when booking is completed
       onDateSelect({
         roomNumber: selectingRoom,
         checkIn: checkIn!,
@@ -136,6 +156,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   };
 
   const handleCellMouseEnter = (roomNumber: number, date: string) => {
+    // Track hovered cell for showing cues - set immediately for all cells
+    setHoveredCell({ room: roomNumber, date });
+
+    // Existing hover range logic for after check-in selection
     if (
       !checkIn ||
       checkOut ||
@@ -149,7 +173,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
     setHoveredDate(date);
   };
 
-  const handleGridMouseLeave = () => setHoveredDate(null);
+  const handleGridMouseLeave = () => {
+    setHoveredDate(null);
+    setHoveredCell(null);
+  };
 
   const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
 
@@ -239,7 +266,9 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
           }}
         >
           {/* Top-left corner */}
-          <div className="sticky left-0 top-0 z-20 h-12 border-b border-r border-gray-200 bg-gray-50" />
+          <div className="sticky left-0 top-0 z-20 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-50">
+            <span className="text-sm font-medium text-foreground">DAY</span>
+          </div>
 
           {/* Room headers */}
           {ROOM_CONFIG.rooms.map((room, roomIndex) => (
@@ -306,6 +335,11 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                     selectingRoom === room.number &&
                     dateStr === hoveredDate;
                   const isLastCol = roomIndex === ROOM_CONFIG.rooms.length - 1;
+                  const isHovered = hoveredCell?.room === room.number && hoveredCell?.date === dateStr;
+                  // Show "check-in" cue when hovering before any selection
+                  const showCheckInCue = isHovered && !checkIn && status === "available";
+                  // Show "check-out" cue when hovering after check-in is selected (same room, date after check-in)
+                  const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && status === "available";
 
                   return (
                     <button
@@ -317,13 +351,13 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         handleCellMouseEnter(room.number, dateStr)
                       }
                       className={cn(
-                        "flex h-12 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors",
+                        "relative flex h-12 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors",
                         isLastRow && "border-b-0",
                         isLastCol && "border-r-0",
                         status === "booked" &&
                           "cursor-not-allowed bg-red-100",
                         status === "available" &&
-                          "bg-green-100 text-green-700 hover:bg-green-200 hover:border-green-300",
+                          "bg-green-100 text-green-700 hover:bg-green-200 hover:border-green-300 cursor-pointer",
                         (status === "selecting" ||
                           status === "selected" ||
                           isInRange) &&
@@ -338,6 +372,11 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
+                      {(showCheckInCue || showCheckOutCue) && (
+                        <span className="text-xs font-medium text-foreground whitespace-nowrap pointer-events-none">
+                          {showCheckInCue ? "Check-in" : "Check-out"}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

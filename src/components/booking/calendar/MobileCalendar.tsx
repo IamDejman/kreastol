@@ -39,6 +39,7 @@ export function MobileCalendar({
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
+  const [hoveredCell, setHoveredCell] = useState<{ room: number; date: string } | null>(null);
   const [visibleDaysCount, setVisibleDaysCount] = useState(6);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -71,11 +72,28 @@ export function MobileCalendar({
     const d = parseISO(date);
     const ci = parseISO(checkIn!);
 
-    if (isBefore(d, ci) || date === checkIn!) {
+    // Allow deselection: clicking on check-out deselects it
+    if (checkOut && date === checkOut) {
+      setCheckOut(null);
+      setHoveredCell(null);
+      return;
+    }
+
+    // Allow deselection: clicking on check-in deselects everything
+    if (date === checkIn) {
+      setSelectingRoom(null);
+      setCheckIn(null);
+      setCheckOut(null);
+      setHoveredCell(null);
+      return;
+    }
+
+    if (isBefore(d, ci)) {
       setCheckIn(date);
       setCheckOut(null);
     } else {
       setCheckOut(date);
+      setHoveredCell(null); // Clear hover cue when booking is completed
       onDateSelect({
         roomNumber: selectingRoom,
         checkIn: checkIn!,
@@ -111,6 +129,15 @@ export function MobileCalendar({
   };
 
   const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH;
+
+  const handleCellMouseEnter = (roomNumber: number, date: string) => {
+    // Track hovered cell for showing cues - set immediately for all cells
+    setHoveredCell({ room: roomNumber, date });
+  };
+
+  const handleGridMouseLeave = () => {
+    setHoveredCell(null);
+  };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
@@ -196,7 +223,11 @@ export function MobileCalendar({
       )}
 
       {/* Grid - transposed structure */}
-      <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-auto">
+      <div 
+        ref={scrollContainerRef} 
+        className="overflow-x-auto overflow-y-auto"
+        onMouseLeave={handleGridMouseLeave}
+      >
         <div
           className="grid border-t border-gray-200"
           style={{
@@ -206,7 +237,9 @@ export function MobileCalendar({
           }}
         >
           {/* Top-left corner */}
-          <div className="sticky left-0 top-0 z-20 h-14 border-b border-r border-gray-200 bg-gray-50" />
+          <div className="sticky left-0 top-0 z-20 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-50">
+            <span className="text-sm font-medium text-foreground">DAY</span>
+          </div>
 
           {/* Room headers */}
           {ROOM_CONFIG.rooms.map((room, roomIndex) => (
@@ -269,6 +302,11 @@ export function MobileCalendar({
                     dateStr > checkIn &&
                     dateStr < checkOut;
                   const isLastCol = roomIndex === ROOM_CONFIG.rooms.length - 1;
+                  const isHovered = hoveredCell?.room === room.number && hoveredCell?.date === dateStr;
+                  // Show "check-in" cue when hovering before any selection
+                  const showCheckInCue = isHovered && !checkIn && status === "available";
+                  // Show "check-out" cue when hovering after check-in is selected (same room, date after check-in)
+                  const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && status === "available";
 
                   return (
                     <button
@@ -276,8 +314,9 @@ export function MobileCalendar({
                       type="button"
                       disabled={status === "booked"}
                       onClick={() => handleCellClick(room.number, dateStr)}
+                      onMouseEnter={() => handleCellMouseEnter(room.number, dateStr)}
                       className={cn(
-                        "flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
+                        "relative flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
                         isLastRow && "border-b-0",
                         isLastCol && "border-r-0",
                         status === "booked" &&
@@ -292,6 +331,11 @@ export function MobileCalendar({
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
+                      {(showCheckInCue || showCheckOutCue) && (
+                        <span className="text-xs font-medium text-foreground whitespace-nowrap pointer-events-none">
+                          {showCheckInCue ? "Check-in" : "Check-out"}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
