@@ -505,7 +505,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                       onMouseEnter={() =>
                         handleCellMouseEnter(room.number, dateStr)
                       }
-                      disabled={status === "blocked"}
+                      disabled={status === "blocked" && !isStaff}
                       className={cn(
                         "relative flex h-12 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors",
                         isLastRow && "border-b-0",

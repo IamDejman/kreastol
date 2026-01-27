@@ -488,7 +488,7 @@ export function MobileCalendar({
                       onMouseEnter={() => handleCellMouseEnter(room.number, dateStr)}
                       onTouchStart={(e) => handleCellTouchStart(e, room.number, dateStr)}
                       onTouchEnd={handleCellTouchEnd}
-                      disabled={status === "blocked"}
+                      disabled={status === "blocked" && !isStaff}
                       className={cn(
                         "relative flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
                         isLastRow && "border-b-0",
