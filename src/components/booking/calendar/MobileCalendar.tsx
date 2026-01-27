@@ -480,9 +480,6 @@ export function MobileCalendar({
                       )
                     : "";
                   
-                  // Add visual connector for multi-night bookings
-                  const showConnector = bookingPos.booking && (bookingPos.isMiddle || bookingPos.isCheckOut);
-
                   return (
                     <button
                       key={room.number}
@@ -512,11 +509,6 @@ export function MobileCalendar({
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
-                      {/* Multi-night booking connector line */}
-                      {showConnector && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 w-full bg-primary/30 -z-0" />
-                      )}
-                      
                       {/* Booking code indicator for multi-night bookings */}
                       {status === "booked" && bookingPos.booking && bookingPos.isCheckIn && (
                         <div className="absolute top-0.5 left-0.5 px-1 py-0.5 bg-primary/20 rounded text-[8px] font-mono font-semibold text-primary leading-none z-10">
