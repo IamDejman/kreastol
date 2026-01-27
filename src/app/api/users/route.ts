@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
 import type { User, UserStatus, UserRole } from "@/types";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 // Database types
 interface DbUser {
@@ -119,15 +120,16 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Hash password before storing
-    if (!user.password) {
-      return NextResponse.json(
-        { error: "Password is required" },
-        { status: 400 }
-      );
-    }
+    // Hash password before storing.
+    // If no password is provided (e.g. owner-created receptionist),
+    // generate a secure random temporary password so the account exists
+    // but the user must set their real password via the "forgot password" flow.
+    const plainPassword =
+      user.password && user.password.trim().length > 0
+        ? user.password
+        : crypto.randomBytes(32).toString("hex");
 
-    const hashedPassword = await bcrypt.hash(user.password, 10);
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
     const dbUser = {
       ...userToDbUser(user),
       password: hashedPassword,

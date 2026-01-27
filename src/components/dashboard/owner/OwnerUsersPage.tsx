@@ -30,7 +30,6 @@ export function OwnerUsersPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createEmail, setCreateEmail] = useState("");
-  const [createPassword, setCreatePassword] = useState("");
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
@@ -78,12 +77,11 @@ export function OwnerUsersPage() {
   const resetCreateForm = () => {
     setCreateName("");
     setCreateEmail("");
-    setCreatePassword("");
   };
 
   const handleCreate = async () => {
-    if (!createName.trim() || !createEmail.trim() || !createPassword.trim()) {
-      setError("Name, email and password are required.");
+    if (!createName.trim() || !createEmail.trim()) {
+      setError("Name and email are required.");
       return;
     }
     setIsLoading(true);
@@ -92,7 +90,6 @@ export function OwnerUsersPage() {
       const userPayload = {
         name: createName.trim(),
         email: createEmail.trim(),
-        password: createPassword,
         role: "receptionist" as const,
         status: "active" as const,
         dbId: "",
@@ -331,12 +328,6 @@ export function OwnerUsersPage() {
             type="email"
             value={createEmail}
             onChange={(e) => setCreateEmail(e.target.value)}
-          />
-          <Input
-            label="Password"
-            type="password"
-            value={createPassword}
-            onChange={(e) => setCreatePassword(e.target.value)}
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button

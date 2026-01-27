@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils/cn";
 
 const ownerLinks = [
   { href: "/owner/guests", label: "Guests" },
+  { href: "/owner/users", label: "Users" },
   { href: "/owner/audit-log", label: "Audit logs" },
 ];
 

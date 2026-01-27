@@ -127,6 +127,25 @@ export async function PATCH(
       | undefined;
     const updateData: Partial<DbBooking> = {};
 
+    // Fetch existing booking so we can record meaningful audit details
+    const { data: existingData, error: fetchError } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("booking_code", params.code)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("Error fetching existing booking for update:", fetchError);
+      return NextResponse.json(
+        { error: `Failed to load booking for update: ${fetchError.message}` },
+        { status: 500 }
+      );
+    }
+
+    const existingBooking = existingData
+      ? dbBookingToBooking(existingData as DbBooking)
+      : null;
+
     if (updates.roomNumber !== undefined) updateData.room_number = updates.roomNumber;
     if (updates.roomRate !== undefined) updateData.room_rate = updates.roomRate;
     if (updates.checkIn !== undefined) updateData.check_in = updates.checkIn;
@@ -162,12 +181,63 @@ export async function PATCH(
     }
 
     if (actor) {
+      // Build a concise description of what changed for the audit log
+      let context = params.code;
+
+      if (existingBooking) {
+        const changes: string[] = [];
+
+        const describeChange = <K extends keyof Booking>(
+          field: K,
+          label: string
+        ) => {
+          const newValue = updates[field];
+          if (newValue === undefined) return;
+
+          const oldValue = existingBooking[field];
+          if (newValue === oldValue) return;
+
+          const oldText =
+            oldValue === null || oldValue === undefined || oldValue === ""
+              ? "—"
+              : String(oldValue);
+          const newText =
+            newValue === null || newValue === undefined || newValue === ""
+              ? "—"
+              : String(newValue);
+
+          changes.push(`${label} ${oldText} → ${newText}`);
+        };
+
+        describeChange("roomNumber", "room");
+        describeChange("roomRate", "rate");
+        describeChange("checkIn", "check-in");
+        describeChange("checkOut", "check-out");
+        describeChange("nights", "nights");
+        describeChange("totalAmount", "total");
+        describeChange("guestName", "guest");
+        describeChange("guestPhone", "phone");
+        describeChange("guestEmail", "email");
+        describeChange("specialRequests", "notes");
+        describeChange("accountNumber", "acct no");
+        describeChange("bankName", "bank");
+        describeChange("accountName", "acct name");
+        describeChange("paymentStatus", "status");
+        describeChange("paymentMethod", "method");
+        describeChange("paymentReference", "ref");
+        describeChange("paymentDate", "paid_at");
+
+        if (changes.length > 0) {
+          context = `${params.code}: ${changes.join(", ")}`;
+        }
+      }
+
       await logAuditAction({
         actorId: actor.id,
         actorName: actor.name,
         actorRole: actor.role,
         action: "update_booking",
-        context: params.code,
+        context,
       });
     }
 
