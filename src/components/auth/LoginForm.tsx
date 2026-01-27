@@ -7,12 +7,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import { loginSchema, type LoginValues } from "@/lib/utils/validation";
 import { useAuthStore } from "@/store/authStore";
+import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils/cn";
 
 export function LoginForm() {
   const router = useRouter();
+  const toast = useToast();
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
@@ -32,9 +34,21 @@ export function LoginForm() {
     clearError();
     try {
       await login(data);
-      router.push("/");
-    } catch {
+      // Get user from store after login
+      const user = useAuthStore.getState().user;
+      if (user) {
+        toast.success(`Welcome back, ${user.name}!`);
+        // Small delay to ensure cookie is set and toast is visible
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 300);
+      } else {
+        // Fallback if user not in store
+        router.replace("/");
+      }
+    } catch (err) {
       // Error stored in auth store
+      console.error("Login error:", err);
     }
   };
 
