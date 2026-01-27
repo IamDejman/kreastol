@@ -259,9 +259,9 @@ export function MobileCalendar({
       }, 0);
   };
 
-  // Calculate total monthly revenue
+  // Calculate total monthly revenue for all days in the month
   const getTotalRevenue = (): number => {
-    return days.reduce((sum, day) => {
+    return allDays.reduce((sum, day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       return sum + getDailyRevenue(dateStr);
     }, 0);

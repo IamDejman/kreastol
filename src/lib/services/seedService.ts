@@ -20,7 +20,12 @@ export async function seedDefaultUsers(): Promise<void> {
           console.log(`Seeded default user: ${user.email}`);
         } catch (createError: any) {
           // Ignore duplicate key errors (user might have been created between check and insert)
-          if (createError?.message?.includes("duplicate key") || createError?.code === "23505") {
+          // Also ignore errors about user already existing (API now returns 200 for existing users)
+          if (
+            createError?.message?.includes("duplicate key") ||
+            createError?.message?.includes("already exists") ||
+            createError?.code === "23505"
+          ) {
             console.log(`User ${user.email} already exists, skipping`);
           } else {
             console.error(`Error creating user ${user.email}:`, createError);

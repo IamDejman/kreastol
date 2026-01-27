@@ -98,7 +98,8 @@ export const supabaseService = {
       body: JSON.stringify(user),
     });
 
-    if (!response.ok) {
+    // API returns 200 for existing users, 201 for newly created users
+    if (!response.ok && response.status !== 200 && response.status !== 201) {
       const error = await response.json();
       throw new Error(error.error || "Failed to create user");
     }
