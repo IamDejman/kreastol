@@ -4,8 +4,10 @@ import { storageService } from "./storageService";
 const AUTH_COOKIE = "kreastol_current_user";
 const SESSION_START_KEY = "kreastol_session_start";
 const LAST_ACTIVITY_KEY = "kreastol_last_activity";
-const SESSION_TIMEOUT = 60 * 60 * 1000; // 60 minutes in milliseconds
-const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes in milliseconds
+// We only want to log users out after 60 minutes of *idle* time,
+// not after a fixed time window since login.
+const SESSION_TIMEOUT = 60 * 60 * 1000; // kept for cookie max-age, not for enforcing logout
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes of inactivity
 
 interface SessionData {
   user: User;
@@ -22,7 +24,9 @@ function setAuthCookie(user: User): void {
     lastActivity: now,
   };
   const value = encodeURIComponent(JSON.stringify(sessionData));
-  document.cookie = `${AUTH_COOKIE}=${value}; path=/; max-age=${SESSION_TIMEOUT / 1000}; SameSite=Lax`;
+  document.cookie = `${AUTH_COOKIE}=${value}; path=/; max-age=${
+    SESSION_TIMEOUT / 1000
+  }; SameSite=Lax`;
   // Also store in localStorage for quick access
   localStorage.setItem(SESSION_START_KEY, now.toString());
   localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
@@ -50,7 +54,9 @@ export function updateLastActivity(): void {
       const sessionData: SessionData = JSON.parse(value);
       sessionData.lastActivity = now;
       const updatedValue = encodeURIComponent(JSON.stringify(sessionData));
-      document.cookie = `${AUTH_COOKIE}=${updatedValue}; path=/; max-age=${SESSION_TIMEOUT / 1000}; SameSite=Lax`;
+      document.cookie = `${AUTH_COOKIE}=${updatedValue}; path=/; max-age=${
+        SESSION_TIMEOUT / 1000
+      }; SameSite=Lax`;
     } catch {
       // Ignore parse errors
     }
@@ -70,17 +76,11 @@ export function getLastActivity(): number | null {
 }
 
 export function checkSessionTimeout(): { expired: boolean; reason: string | null } {
-  const sessionStart = getSessionStart();
   const lastActivity = getLastActivity();
   const now = Date.now();
 
-  if (!sessionStart || !lastActivity) {
+  if (!lastActivity) {
     return { expired: true, reason: "Session not found" };
-  }
-
-// Check session timeout (60 minutes from login)
-  if (now - sessionStart > SESSION_TIMEOUT) {
-    return { expired: true, reason: "session_timeout" };
   }
 
   // Check inactivity timeout (60 minutes of no activity)
@@ -92,10 +92,30 @@ export function checkSessionTimeout(): { expired: boolean; reason: string | null
 }
 
 export async function login(credentials: LoginCredentials): Promise<User> {
-  const user = await storageService.getUserByEmail(credentials.email);
-  if (!user || user.password !== credentials.password) {
-    throw new Error("Invalid email or password.");
+  if (typeof window === "undefined") {
+    throw new Error("Login can only be performed in the browser.");
   }
+
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(credentials),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Login failed");
+  }
+
+  const user = data.user as User;
+
+  if (user.status !== "active") {
+    throw new Error("Account is inactive. Please contact the owner.");
+  }
+
   storageService.setCurrentUser(user);
   setAuthCookie(user);
   return user;

@@ -10,9 +10,8 @@ import { HOTEL_INFO } from "@/lib/constants/config";
 import { cn } from "@/lib/utils/cn";
 
 const ownerLinks = [
-  { href: "/owner/bookings", label: "Bookings" },
   { href: "/owner/guests", label: "Guests" },
-  { href: "/owner/revenue", label: "Revenue" },
+  { href: "/owner/audit-log", label: "Audit logs" },
 ];
 
 const receptionistLinks = [
@@ -27,7 +26,11 @@ export function MobileHeader() {
   const isMobileMenuOpen = useUIStore((s) => s.isMobileMenuOpen);
   const toggleMobileMenu = useUIStore((s) => s.toggleMobileMenu);
 
-  const isOwnerPage = pathname.startsWith("/owner");
+  const isOwner = user?.role === "owner";
+  const isReceptionist = user?.role === "receptionist";
+
+  // Treat home as dashboard entry for owners so they can open the menu there
+  const isOwnerPage = pathname.startsWith("/owner") || (isOwner && pathname === "/");
   const isReceptionistPage = pathname.startsWith("/receptionist");
   const isDashboardPage = isOwnerPage || isReceptionistPage;
 
@@ -42,7 +45,7 @@ export function MobileHeader() {
   return (
     <>
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-4 md:hidden">
-        <Link href={isDashboardPage ? (user?.role === "owner" ? "/owner" : "/receptionist") : "/"}>
+        <Link href="/">
           <span className="font-heading text-sm font-semibold text-primary sm:text-base md:text-lg">
             {HOTEL_INFO.name}
           </span>
@@ -75,18 +78,11 @@ export function MobileHeader() {
         <Drawer
           isOpen={isMobileMenuOpen}
           onClose={toggleMobileMenu}
-          title={user?.role === "owner" ? "Owner Menu" : "Receptionist Menu"}
           className="md:hidden"
         >
           <div className="flex flex-col">
             {user && (
               <>
-                <div className="px-4 py-3 border-b">
-                  <p className="text-sm text-gray-500 capitalize">{user.role}</p>
-                  {user.name && (
-                    <p className="text-base font-medium text-foreground">{user.name}</p>
-                  )}
-                </div>
                 <nav className="flex flex-col p-2">
                   {links.map(({ href, label }) => {
                     const isRootPath = href === "/owner" || href === "/receptionist";
@@ -112,13 +108,6 @@ export function MobileHeader() {
                   })}
                 </nav>
                 <div className="border-t p-2 mt-auto">
-                  <Link
-                    href="/"
-                    onClick={toggleMobileMenu}
-                    className="flex min-h-touch items-center rounded-lg px-3 py-3 text-base font-medium text-gray-600 hover:bg-gray-100"
-                  >
-                    ← Back to site
-                  </Link>
                   <button
                     type="button"
                     onClick={handleLogout}

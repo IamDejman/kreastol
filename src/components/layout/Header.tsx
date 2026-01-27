@@ -18,6 +18,8 @@ export function Header() {
     router.push("/login");
   };
 
+  const isOwner = user?.role === "owner";
+
   return (
     <header className="sticky top-0 z-30 hidden border-b bg-white md:block">
       <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-4 lg:px-8">
@@ -27,14 +29,40 @@ export function Header() {
           </span>
         </Link>
         <nav className="flex items-center gap-6">
+          {isOwner && (
+            <>
+              <Link
+                href="/owner/guests"
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  pathname.startsWith("/owner/guests")
+                    ? "text-primary"
+                    : "text-gray-600 hover:text-primary"
+                )}
+              >
+                Guests
+              </Link>
+              <Link
+                href="/owner/audit-log"
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  pathname.startsWith("/owner/audit-log")
+                    ? "text-primary"
+                    : "text-gray-600 hover:text-primary"
+                )}
+              >
+                Audit logs
+              </Link>
+            </>
+          )}
           {user && (
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-primary transition-colors"
+              className="flex min-h-touch min-w-touch items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-primary transition-colors"
+              aria-label="Log out"
             >
               <LogOut className="h-4 w-4" />
-              Log out
             </button>
           )}
         </nav>

@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Filter } from "lucide-react";
 import { useBookings } from "@/hooks/useBookings";
-import { useIsMobile } from "@/hooks/useMediaQuery";
+import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { SearchBar } from "@/components/dashboard/shared/SearchBar";
 import { BookingsTable } from "@/components/dashboard/owner/BookingsTable";
 import { MobileBookingsTable } from "@/components/dashboard/owner/MobileBookingsTable";
@@ -13,10 +13,14 @@ import { StatCard } from "@/components/dashboard/shared/StatCard";
 import { Pagination } from "@/components/ui/Pagination";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils/formatters";
+import { useAuthStore } from "@/store/authStore";
+import { supabaseService } from "@/lib/services/supabaseService";
 
 export default function OwnerBookingsPage() {
   const { bookings } = useBookings();
+  const currentUser = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const [search, setSearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
@@ -26,6 +30,24 @@ export default function OwnerBookingsPage() {
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   
   const ITEMS_PER_PAGE = 10;
+
+  // Audit: owner viewed bookings dashboard
+  useEffect(() => {
+    if (!currentUser) return;
+    supabaseService
+      .createAuditLog({
+        actorId: currentUser.dbId,
+        actorName: currentUser.name,
+        actorRole: currentUser.role,
+        action: "view_owner_bookings",
+        context: "/owner/bookings",
+      })
+      .catch((error) => {
+        console.error("Failed to write audit log (view_owner_bookings):", error);
+      });
+    // fire once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.dbId]);
 
   const filtered = useMemo(() => {
     let list = [...bookings];
@@ -173,7 +195,7 @@ export default function OwnerBookingsPage() {
         </div>
       </div>
       
-      {isMobile ? (
+      {isMobile || isTablet ? (
         <MobileBookingsTable bookings={paginatedBookings} />
       ) : (
         <BookingsTable bookings={paginatedBookings} />

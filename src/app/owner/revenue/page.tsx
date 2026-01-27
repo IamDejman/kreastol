@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Filter } from "lucide-react";
 import { useBookings } from "@/hooks/useBookings";
 import { RevenueChart } from "@/components/dashboard/owner/RevenueChart";
@@ -8,9 +8,12 @@ import { StatCard } from "@/components/dashboard/shared/StatCard";
 import { BookingsFilterDropdown } from "@/components/dashboard/owner/BookingsFilterDropdown";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils/formatters";
+import { useAuthStore } from "@/store/authStore";
+import { supabaseService } from "@/lib/services/supabaseService";
 
 export default function OwnerRevenuePage() {
   const { bookings } = useBookings();
+  const currentUser = useAuthStore((s) => s.user);
   const [roomFilter, setRoomFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -56,6 +59,23 @@ export default function OwnerRevenuePage() {
   }, [filtered]);
 
   const hasActiveFilters = Boolean(roomFilter !== "all" || startDate || endDate);
+
+  // Audit: owner viewed revenue analytics
+  useEffect(() => {
+    if (!currentUser) return;
+    supabaseService
+      .createAuditLog({
+        actorId: currentUser.dbId,
+        actorName: currentUser.name,
+        actorRole: currentUser.role,
+        action: "view_owner_revenue",
+        context: "/owner/revenue",
+      })
+      .catch((error) => {
+        console.error("Failed to write audit log (view_owner_revenue):", error);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.dbId]);
 
   const handleApplyFilters = (filters: { roomFilter: string; startDate: string; endDate: string }) => {
     setRoomFilter(filters.roomFilter);

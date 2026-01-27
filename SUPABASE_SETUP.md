@@ -46,13 +46,12 @@ NEXT_PUBLIC_SUPABASE_URL=your_actual_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_actual_anon_key
 ```
 
-### 5. Seed Default Users
+### 5. Create Initial Users
 
-The app will automatically seed default users on first run:
-- **Owner**: `owner@kreastol.com` / `owner123`
-- **Receptionist**: `desk@kreastol.com` / `desk123`
-
-If you need to manually seed users, you can run the seed function or insert them via the Supabase dashboard.
+For security, the app no longer ships with hard-coded default credentials.
+Create your own owner and receptionist accounts either:
+- Via the Supabase dashboard (`users` table), or
+- By calling the `/api/users` endpoint with secure passwords.
 
 ### 6. Test the Setup
 
@@ -65,14 +64,14 @@ If you need to manually seed users, you can run the seed function or insert them
 1. Go to your Supabase project dashboard
 2. Navigate to "Table Editor"
 3. You should see:
-   - `users` table with the default users
+   - `users` table with the users you created
    - `bookings` table (empty initially, will populate as bookings are created)
 
 ## Security Notes
 
-- The current implementation stores passwords in plain text. For production, consider:
+- Passwords are stored as bcrypt hashes via the API – never as plain text.
+- For production, also consider:
   - Using Supabase Auth instead of custom authentication
-  - Hashing passwords before storing them
   - Implementing Row Level Security (RLS) policies
 
 ## Troubleshooting

@@ -1,5 +1,7 @@
 export type PaymentStatus = "paid" | "unpaid";
 
+export type PaymentMethod = "card" | "transfer";
+
 export interface Booking {
   bookingCode: string;
   roomNumber: 1 | 2 | 3 | 4;
@@ -16,6 +18,7 @@ export interface Booking {
   bankName: string;
   accountName: string;
   paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
   paymentReference: string | null;
   paymentDate: string | null;
   createdAt: string;
@@ -27,6 +30,8 @@ export interface BookingFormData {
   guestPhone: string;
   guestEmail: string;
   specialRequests?: string;
+  paymentStatus?: PaymentStatus;
+  paymentMethod?: PaymentMethod;
 }
 
 export interface DateSelection {

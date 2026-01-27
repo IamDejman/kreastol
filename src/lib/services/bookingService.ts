@@ -6,6 +6,7 @@ import {
   generateBookingCode,
   getMockBankDetails,
 } from "@/lib/utils/generators";
+import type { PaymentMethod, PaymentStatus } from "@/types";
 
 export async function getBookedDates(): Promise<Record<number, string[]>> {
   const bookings = await storageService.getBookings();
@@ -84,6 +85,15 @@ export async function createBooking(
   const bank = getMockBankDetails();
   const now = new Date().toISOString();
 
+  const paymentStatus: PaymentStatus = formData.paymentStatus ?? "unpaid";
+  const isPaid = paymentStatus === "paid";
+  const paymentMethod: PaymentMethod | undefined = isPaid
+    ? (formData.paymentMethod ?? "transfer")
+    : undefined;
+  const paymentReference =
+    isPaid ? `MANUAL-${Date.now()}` : `MOCK-${Date.now()}`;
+  const paymentDate = isPaid ? now : null;
+
   const booking: Booking = {
     bookingCode: generateBookingCode(),
     roomNumber: roomNumber as 1 | 2 | 3 | 4,
@@ -99,9 +109,10 @@ export async function createBooking(
     accountNumber: bank.accountNumber,
     bankName: bank.bankName,
     accountName: bank.accountName,
-    paymentStatus: "unpaid",
-    paymentReference: `MOCK-${Date.now()}`,
-    paymentDate: now,
+    paymentStatus,
+    paymentMethod,
+    paymentReference,
+    paymentDate,
     createdAt: now,
     updatedAt: now,
   };

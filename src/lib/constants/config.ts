@@ -61,22 +61,6 @@ export const STORAGE_KEYS = {
   currentUser: "kreastol_current_user",
 } as const;
 
-export const DEFAULT_USERS: Pick<User, "name" | "email" | "password" | "role">[] =
-  [
-    {
-      name: "Admin Owner",
-      email: "owner@kreastol.com",
-      password: "owner123",
-      role: "owner",
-    },
-    {
-      name: "Front Desk",
-      email: "desk@kreastol.com",
-      password: "desk123",
-      role: "receptionist",
-    },
-  ];
-
 export const MOBILE_CONFIG = {
   minTapTarget: 44,
   bottomNavHeight: 64,

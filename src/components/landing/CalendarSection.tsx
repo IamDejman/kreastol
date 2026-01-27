@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useIsMobile } from "@/hooks/useMediaQuery";
+import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useBookings } from "@/hooks/useBookings";
 import { MobileCalendar } from "@/components/booking/calendar/MobileCalendar";
 import { DesktopCalendar } from "@/components/booking/calendar/DesktopCalendar";
@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/Spinner";
 
 export function CalendarSection() {
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const router = useRouter();
   const { isLoading, hasLoadedBookings } = useBookings();
 
@@ -30,7 +31,7 @@ export function CalendarSection() {
       <Spinner size="sm" />
       <span>Loading availability…</span>
     </div>
-  ) : isMobile ? (
+  ) : isMobile || isTablet ? (
     <MobileCalendar onDateSelect={handleDateSelect} maxHeight="70vh" />
   ) : (
     <DesktopCalendar onDateSelect={handleDateSelect} maxHeight="60vh" />

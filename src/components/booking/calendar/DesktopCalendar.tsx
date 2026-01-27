@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, Fragment, useRef } from "react";
+import { useState, Fragment, useRef, useEffect } from "react";
 import {
   format,
   subMonths,
   addMonths,
   subDays,
+  addDays,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
   parseISO,
   isBefore,
   isWithinInterval,
+  startOfWeek,
 } from "date-fns";
 import type { DateSelection, Booking } from "@/types";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
@@ -24,6 +26,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useAuthStore } from "@/store/authStore";
 import { useToast } from "@/components/ui/Toast";
 import { getDatesInRange } from "@/lib/utils/dateUtils";
+import { supabaseService } from "@/lib/services/supabaseService";
 
 const MIN_DAY_ROW_WIDTH = 80;
 const ROOM_COLUMN_WIDTH = 160;
@@ -50,10 +53,17 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ room: number; date: string } | null>(null);
-  const [visibleDaysCount, setVisibleDaysCount] = useState(6);
-  const [showPastDates, setShowPastDates] = useState(false);
+  const [viewMode, setViewMode] = useState<"week" | "all">("week");
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [blockedOverlay, setBlockedOverlay] = useState<{
+    roomNumber: number;
+    dates: string[];
+    reason: string | null;
+  } | null>(null);
+  const [isBlockedOverlayLoading, setIsBlockedOverlayLoading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const weekAnchorRef = useRef<HTMLDivElement | null>(null);
 
   useCalendarSync();
   const toast = useToast();
@@ -66,17 +76,79 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
 
   const start = startOfMonth(base);
   const end = endOfMonth(base);
-  const today = format(new Date(), "yyyy-MM-dd");
+  const todayDate = new Date();
+  const today = format(todayDate, "yyyy-MM-dd");
   const allDays = eachDayOfInterval({ start, end });
-  // Filter days based on showPastDates: if false, only show future dates; if true, show all
-  const allAvailableDays = showPastDates 
-    ? allDays 
-    : allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
-  const days = allAvailableDays.slice(0, visibleDaysCount);
-  
-  const hasMoreDays = visibleDaysCount < allAvailableDays.length;
-  const canCollapse = visibleDaysCount > 6;
-  const hasPastDates = allDays.some((d) => format(d, "yyyy-MM-dd") < today);
+
+  // Audit: staff viewed calendar (desktop)
+  const hasLoggedViewRef = useRef(false);
+  useEffect(() => {
+    if (!isStaff || !user || hasLoggedViewRef.current) return;
+    hasLoggedViewRef.current = true;
+    supabaseService
+      .createAuditLog({
+        actorId: user.dbId,
+        actorName: user.name,
+        actorRole: user.role,
+        action: "view_calendar",
+        context: "desktop",
+      })
+      .catch((error) => {
+        console.error("Failed to write audit log (view_calendar desktop):", error);
+      });
+  }, [isStaff, user]);
+
+  // Build Sunday–Saturday weeks for the month (clamped to month boundaries)
+  const firstWeekStart = startOfWeek(start, { weekStartsOn: 0 });
+  type WeekSegment = { start: Date; end: Date; key: string };
+  const weeks: WeekSegment[] = [];
+  let cursor = firstWeekStart;
+
+  while (cursor <= end) {
+    const weekStart = cursor < start ? start : cursor;
+    const weekEndCandidate = addDays(cursor, 6);
+    const weekEnd = weekEndCandidate > end ? end : weekEndCandidate;
+    weeks.push({
+      start: weekStart,
+      end: weekEnd,
+      key: `${format(weekStart, "yyyy-MM-dd")}_${format(
+        weekEnd,
+        "yyyy-MM-dd"
+      )}`,
+    });
+    cursor = addDays(cursor, 7);
+  }
+
+  // Determine active week: either user-selected, or the one containing today, or the first week
+  const findWeekByKey = (key: string | null): WeekSegment | null => {
+    if (!key) return null;
+    return weeks.find((w) => w.key === key) ?? null;
+  };
+
+  const selectedWeek = findWeekByKey(selectedWeekKey);
+
+  const weekContainingToday =
+    base.getFullYear() === todayDate.getFullYear() &&
+    base.getMonth() === todayDate.getMonth()
+      ? weeks.find(
+          (w) => todayDate >= w.start && todayDate <= w.end
+        ) ?? null
+      : null;
+
+  const anchorWeekForAll: WeekSegment | null =
+    selectedWeek || weekContainingToday || weeks[0] || null;
+
+  const activeWeek: WeekSegment | null =
+    viewMode === "week"
+      ? selectedWeek || weekContainingToday || weeks[0] || null
+      : null;
+
+  const anchorDateForAll = anchorWeekForAll?.start ?? null;
+
+  const days =
+    viewMode === "all" || !activeWeek
+      ? allDays
+      : eachDayOfInterval({ start: activeWeek.start, end: activeWeek.end });
 
 
   const isRangeAvailable = (roomNumber: number, from: string, to: string) => {
@@ -104,11 +176,9 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
   };
 
   const handleCellClick = (roomNumber: number, date: string) => {
-    // If staff clicks on a blocked cell, allow unblocking
+    // If staff clicks on a blocked cell, show overlay with details
     if (isRoomBlocked(roomNumber, date) && isStaff) {
-      if (confirm(`Unblock Room ${roomNumber} on ${format(new Date(date), "MMM dd, yyyy")}?`)) {
-        unblockRoom(roomNumber, [date]).then(() => useBookingStore.getState().fetchBookings());
-      }
+      openBlockedOverlay(roomNumber, date);
       return;
     }
     
@@ -233,6 +303,120 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
     return "available";
   };
 
+  const openBlockedOverlay = async (roomNumber: number, date: string) => {
+    try {
+      setIsBlockedOverlayLoading(true);
+
+      const response = await fetch(
+        `/api/blocked-rooms?roomNumber=${encodeURIComponent(roomNumber)}`
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || "Failed to load blocked room details");
+        return;
+      }
+
+      const data = await response.json();
+      const details =
+        (data.blockedRoomDetails?.[roomNumber] as
+          | { date: string; reason: string | null }[]
+          | undefined) || [];
+
+      if (!details.length) {
+        toast.error("No blocked dates found for this room");
+        return;
+      }
+
+      // Find the contiguous block (same reason, consecutive dates) that includes the clicked date
+      const sorted = [...details].sort((a, b) => a.date.localeCompare(b.date));
+      const targetIndex = sorted.findIndex((d) => d.date === date);
+
+      if (targetIndex === -1) {
+        toast.error("Blocked date details not found");
+        return;
+      }
+
+      const baseReason = sorted[targetIndex].reason ?? null;
+      const group: { date: string; reason: string | null }[] = [sorted[targetIndex]];
+
+      // Expand backwards
+      for (let i = targetIndex - 1; i >= 0; i--) {
+        const current = sorted[i];
+        const next = sorted[i + 1];
+        const currentDate = parseISO(current.date);
+        const nextDate = parseISO(next.date);
+        const diffDays =
+          (nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays !== 1 || current.reason !== baseReason) break;
+        group.unshift(current);
+      }
+
+      // Expand forwards
+      for (let i = targetIndex + 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const current = sorted[i];
+        const prevDate = parseISO(prev.date);
+        const currentDate = parseISO(current.date);
+        const diffDays =
+          (currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays !== 1 || current.reason !== baseReason) break;
+        group.push(current);
+      }
+
+      const groupDates = group.map((g) => g.date);
+
+      setBlockedOverlay({
+        roomNumber,
+        dates: groupDates,
+        reason: baseReason,
+      });
+
+      // Audit: staff viewed blocked-room detail from calendar (desktop)
+      if (isStaff && user) {
+        const first = groupDates[0];
+        const last = groupDates[groupDates.length - 1];
+        const rangeLabel =
+          groupDates.length === 1 ? first : `${first} - ${last}`;
+        supabaseService
+          .createAuditLog({
+            actorId: user.dbId,
+            actorName: user.name,
+            actorRole: user.role,
+            action: "view_blocked_room_detail",
+            context: `room ${roomNumber}: ${rangeLabel}`,
+          })
+          .catch((error) => {
+            console.error(
+              "Failed to write audit log (view_blocked_room_detail desktop):",
+              error
+            );
+          });
+      }
+    } catch (error: any) {
+      console.error("Error loading blocked room details:", error);
+      toast.error(error?.message || "Failed to load blocked room details");
+    } finally {
+      setIsBlockedOverlayLoading(false);
+    }
+  };
+
+  const handleUnblockFromOverlay = async (roomNumber: number, dates: string[]) => {
+    if (!dates.length) return;
+    try {
+      const actor = user
+        ? { id: user.dbId, name: user.name, role: user.role }
+        : undefined;
+      await unblockRoom(roomNumber, dates, actor);
+      await useBookingStore.getState().fetchBookings();
+      setBlockedOverlay(null);
+      toast.success("Room unblocked successfully");
+    } catch (error: any) {
+      console.error("Error unblocking room from overlay:", error);
+      toast.error(error?.message || "Failed to unblock room");
+    }
+  };
+
   // Helper to find booking for a date and determine if it's check-in, check-out, or middle
   const getBookingPosition = (roomNumber: number, dateStr: string): {
     booking: Booking | null;
@@ -289,7 +473,37 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
     setHoveredCell(null);
   };
 
-  const gridWidth = MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH + REVENUE_COLUMN_WIDTH;
+  const gridWidth =
+    MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH + REVENUE_COLUMN_WIDTH;
+
+  // UI helpers for week selection and scrolling
+  const isTodayInWeek = (week: { start: Date; end: Date }) =>
+    todayDate >= week.start && todayDate <= week.end;
+
+  // Audit: staff viewed booking details from calendar (desktop)
+  useEffect(() => {
+    if (!isStaff || !user || !selectedBooking) return;
+    supabaseService
+      .createAuditLog({
+        actorId: user.dbId,
+        actorName: user.name,
+        actorRole: user.role,
+        action: "view_booking_from_calendar",
+        context: selectedBooking.bookingCode,
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to write audit log (view_booking_from_calendar desktop):",
+          error
+        );
+      });
+  }, [isStaff, user, selectedBooking]);
+
+  useEffect(() => {
+    if (viewMode === "all" && weekAnchorRef.current && scrollContainerRef.current) {
+      weekAnchorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [viewMode, base, selectedWeekKey]);
 
   // Calculate daily revenue
   const getDailyRevenue = (dateStr: string): number => {
@@ -435,6 +649,10 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
           {days.map((d, dayIndex) => {
             const dateStr = format(d, "yyyy-MM-dd");
             const isLastRow = dayIndex === days.length - 1;
+            const isAnchorDay =
+              viewMode === "all" &&
+              anchorDateForAll &&
+              d.getTime() === anchorDateForAll.getTime();
 
             return (
               <Fragment key={dateStr}>
@@ -444,6 +662,7 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
                     "sticky left-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-white px-3",
                     isLastRow && "border-b-0"
                   )}
+                  ref={isAnchorDay ? weekAnchorRef : undefined}
                 >
                   <div className="flex flex-col items-center">
                     <span
@@ -576,10 +795,10 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
             );
           })}
           
-          {/* Total Revenue Row */}
+          {/* Total Revenue Row (sticky at bottom) */}
           <>
             {/* Total label */}
-            <div className="sticky left-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
+            <div className="sticky left-0 bottom-0 z-20 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
               <span className="text-sm font-semibold text-foreground">
                 TOTAL
               </span>
@@ -589,12 +808,12 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
             {ROOM_CONFIG.rooms.map((room) => (
               <div
                 key={room.number}
-                className="flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
+                className="sticky bottom-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
               />
             ))}
             
             {/* Total revenue cell */}
-            <div className="flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
+            <div className="sticky bottom-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
               <span className="text-sm font-bold text-foreground">
                 ₦{getTotalRevenue().toLocaleString(undefined, {
                   minimumFractionDigits: 0,
@@ -611,72 +830,52 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
         style={{ width: gridWidth }}
       >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-xs text-gray-500">
-        Click a date to set check-in, then click a later date to set check-out.
-        You’ll be taken to the booking page to complete your details.
-      </p>
-          {(hasMoreDays || canCollapse || hasPastDates) && (
-            <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
-              {hasPastDates && !showPastDates && (
+          <p className="text-xs text-gray-500">
+            Click a date to set check-in, then click a later date to set check-out.
+            You’ll be taken to the booking page to complete your details.
+          </p>
+          <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+            {weeks.map((week) => {
+              const label = `${format(week.start, "d")}-${format(week.end, "d")}`;
+              const isActive =
+                viewMode === "week" &&
+                activeWeek &&
+                week.key === activeWeek.key;
+              const isCurrent = isTodayInWeek(week);
+              return (
                 <button
+                  key={week.key}
                   type="button"
                   onClick={() => {
-                    setShowPastDates(true);
-                    setVisibleDaysCount((prev) =>
-                      Math.min(prev + 6, allDays.length)
-                    );
+                    setViewMode("week");
+                    setSelectedWeekKey(week.key);
                   }}
-                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
+                  className={cn(
+                    "px-2.5 py-1 text-xs rounded-full border transition-colors whitespace-nowrap",
+                    isActive
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                    isCurrent && "font-semibold"
+                  )}
                 >
-                  Show past dates
+                  {label}
+                  {isCurrent && " (This week)"}
                 </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setViewMode("all")}
+              className={cn(
+                "px-2.5 py-1 text-xs rounded-full border transition-colors whitespace-nowrap",
+                viewMode === "all"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
               )}
-              {hasMoreDays && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setVisibleDaysCount((prev) =>
-                      Math.min(prev + 6, allAvailableDays.length)
-                    )
-                  }
-                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
-                >
-                  See more dates ({visibleDaysCount}/{allAvailableDays.length})
-                </button>
-              )}
-              {canCollapse && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVisibleDaysCount(6);
-                    // Scroll back to top of grid when collapsing
-                    setTimeout(() => {
-                      if (scrollContainerRef.current) {
-                        scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-                        scrollContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                      }
-                    }, 100);
-                  }}
-                  className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors whitespace-nowrap"
-                >
-                  Collapse
-                </button>
-              )}
-              {showPastDates && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPastDates(false);
-                    const futureDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
-                    setVisibleDaysCount(Math.min(6, futureDays.length));
-                  }}
-                  className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors whitespace-nowrap"
-                >
-                  Hide past dates
-                </button>
-              )}
-            </div>
-          )}
+            >
+              View all days
+            </button>
+          </div>
         </div>
       </div>
 
@@ -741,17 +940,44 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
                     onChange={async (e) => {
                       const newStatus = e.target.value as "paid" | "unpaid";
                       try {
-                        const { storageService } = await import("@/lib/services/storageService");
-                        await storageService.updateBooking(selectedBooking.bookingCode, {
+                        const { supabaseService } = await import("@/lib/services/supabaseService");
+                        const actorUser = useAuthStore.getState().user;
+                        const isPaid = newStatus === "paid";
+                        const updates = {
                           paymentStatus: newStatus,
-                          paymentDate: newStatus === "paid" ? new Date().toISOString() : null,
-                        });
+                          paymentDate: isPaid ? new Date().toISOString() : null,
+                          paymentMethod: isPaid
+                            ? selectedBooking.paymentMethod ?? "transfer"
+                            : undefined,
+                        };
+
+                        await supabaseService.updateBooking(
+                          selectedBooking.bookingCode,
+                          updates,
+                          actorUser
+                            ? {
+                                id: actorUser.dbId,
+                                name: actorUser.name,
+                                role: actorUser.role,
+                              }
+                            : undefined
+                        );
                         await useBookingStore.getState().fetchBookings();
-                        // Update local state
-                        setSelectedBooking({ ...selectedBooking, paymentStatus: newStatus });
-                        toast.success(`Payment status updated to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`);
+                        setSelectedBooking({
+                          ...selectedBooking,
+                          paymentStatus: newStatus,
+                          paymentDate: updates.paymentDate,
+                          paymentMethod: updates.paymentMethod,
+                        });
+                        toast.success(
+                          `Payment status updated to ${
+                            newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
+                          }`
+                        );
                       } catch (error: any) {
-                        toast.error(error.message || "Failed to update payment status");
+                        toast.error(
+                          error?.message || "Failed to update payment status"
+                        );
                       }
                     }}
                     className="rounded-lg border border-gray-300 bg-white pl-3 pr-8 py-1.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22M19%209l-7%207-7-7%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat"
@@ -761,10 +987,74 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
                   </select>
                 ) : (
                   <Badge
-                    variant={selectedBooking.paymentStatus === "paid" ? "confirmed" : "cancelled"}
+                    variant={
+                      selectedBooking.paymentStatus === "paid"
+                        ? "confirmed"
+                        : "cancelled"
+                    }
                   >
-                    {selectedBooking.paymentStatus.charAt(0).toUpperCase() + selectedBooking.paymentStatus.slice(1)}
+                    {selectedBooking.paymentStatus
+                      .charAt(0)
+                      .toUpperCase() + selectedBooking.paymentStatus.slice(1)}
                   </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Payment Method</span>
+                {isStaff ? (
+                  <select
+                    value={selectedBooking.paymentMethod ?? ""}
+                    disabled={selectedBooking.paymentStatus !== "paid"}
+                    onChange={async (e) => {
+                      const newMethod = e.target.value as "card" | "transfer";
+                      if (selectedBooking.paymentStatus !== "paid") {
+                        toast.error(
+                          "Payment method can only be set when status is Paid"
+                        );
+                        return;
+                      }
+
+                      try {
+                        const { supabaseService } = await import("@/lib/services/supabaseService");
+                        const actorUser = useAuthStore.getState().user;
+
+                        await supabaseService.updateBooking(
+                          selectedBooking.bookingCode,
+                          { paymentMethod: newMethod },
+                          actorUser
+                            ? {
+                                id: actorUser.dbId,
+                                name: actorUser.name,
+                                role: actorUser.role,
+                              }
+                            : undefined
+                        );
+                        await useBookingStore.getState().fetchBookings();
+                        setSelectedBooking({
+                          ...selectedBooking,
+                          paymentMethod: newMethod,
+                        });
+                        toast.success("Payment method updated");
+                      } catch (error: any) {
+                        toast.error(
+                          error?.message || "Failed to update payment method"
+                        );
+                      }
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white pl-3 pr-8 py-1.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22M19%209l-7%207-7-7%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat"
+                  >
+                    <option value="">Select method</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="card">Card</option>
+                  </select>
+                ) : selectedBooking.paymentStatus === "paid" &&
+                  selectedBooking.paymentMethod ? (
+                  <span className="text-sm font-medium capitalize">
+                    {selectedBooking.paymentMethod}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">Not set</span>
                 )}
               </div>
               
@@ -781,6 +1071,89 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
                   <span className="text-sm font-medium">{selectedBooking.guestEmail}</span>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Blocked Room Details Modal (staff only) */}
+      <Modal
+        isOpen={!!blockedOverlay}
+        onClose={() => setBlockedOverlay(null)}
+        title="Blocked Room Details"
+      >
+        {blockedOverlay && (
+          <div className="p-4 sm:p-6 space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                Room{" "}
+                <span className="font-semibold">
+                  {blockedOverlay.roomNumber}
+                </span>{" "}
+                is blocked for{" "}
+                <span className="font-semibold">
+                  {blockedOverlay.dates.length} night
+                  {blockedOverlay.dates.length !== 1 ? "s" : ""}
+                </span>
+                .
+              </p>
+              <p className="text-sm text-gray-600">
+                Reason:{" "}
+                <span className="font-semibold">
+                  {blockedOverlay.reason || "Not specified"}
+                </span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500">
+                Blocked nights
+              </p>
+              <ul className="max-h-40 overflow-y-auto space-y-1 text-sm text-gray-700">
+                {blockedOverlay.dates.map((d) => (
+                  <li key={d} className="flex items-center justify-between">
+                    <span>{format(new Date(d), "MMM dd, yyyy")}</span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
+                      disabled={isBlockedOverlayLoading}
+                      onClick={() =>
+                        handleUnblockFromOverlay(
+                          blockedOverlay.roomNumber,
+                          [d]
+                        )
+                      }
+                    >
+                      Unblock this night
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                className="inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => setBlockedOverlay(null)}
+                disabled={isBlockedOverlayLoading}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="inline-flex justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+                disabled={isBlockedOverlayLoading}
+                onClick={() =>
+                  blockedOverlay &&
+                  handleUnblockFromOverlay(
+                    blockedOverlay.roomNumber,
+                    blockedOverlay.dates
+                  )
+                }
+              >
+                Unblock all nights
+              </button>
             </div>
           </div>
         )}

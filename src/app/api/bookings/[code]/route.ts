@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
-import type { Booking, PaymentStatus } from "@/types";
+import type { Booking, PaymentStatus, UserRole } from "@/types";
 
 // Database types
 interface DbBooking {
@@ -20,6 +20,7 @@ interface DbBooking {
   bank_name: string;
   account_name: string;
   payment_status: string;
+  payment_method: string | null;
   payment_reference: string | null;
   payment_date: string | null;
   created_at: string;
@@ -47,11 +48,35 @@ function dbBookingToBooking(dbBooking: DbBooking): Booking {
     bankName: dbBooking.bank_name,
     accountName: dbBooking.account_name,
     paymentStatus: normalizePaymentStatus(dbBooking.payment_status),
+    paymentMethod: (dbBooking.payment_method as Booking["paymentMethod"]) ?? undefined,
     paymentReference: dbBooking.payment_reference,
     paymentDate: dbBooking.payment_date,
     createdAt: dbBooking.created_at,
     updatedAt: dbBooking.updated_at,
   };
+}
+
+async function logAuditAction(params: {
+  actorId?: string;
+  actorName?: string;
+  actorRole?: UserRole;
+  action: string;
+  context?: string;
+}) {
+  const { actorId, actorName, actorRole, action, context } = params;
+  if (!actorId || !actorName || !actorRole) return;
+
+  const { error } = await supabase.from("audit_logs").insert({
+    actor_id: actorId,
+    actor_name: actorName,
+    actor_role: actorRole,
+    action,
+    context: context ?? null,
+  });
+
+  if (error) {
+    console.error("Failed to write audit log (bookings/[code]):", error);
+  }
 }
 
 // GET /api/bookings/[code] - Get booking by code
@@ -95,7 +120,11 @@ export async function PATCH(
   { params }: { params: { code: string } }
 ) {
   try {
-    const updates: Partial<Booking> = await request.json();
+    const rawBody = await request.json();
+    const updates: Partial<Booking> = rawBody.updates ?? rawBody;
+    const actor = rawBody.actor as
+      | { id: string; name: string; role: UserRole }
+      | undefined;
     const updateData: Partial<DbBooking> = {};
 
     if (updates.roomNumber !== undefined) updateData.room_number = updates.roomNumber;
@@ -113,6 +142,8 @@ export async function PATCH(
     if (updates.bankName !== undefined) updateData.bank_name = updates.bankName;
     if (updates.accountName !== undefined) updateData.account_name = updates.accountName;
     if (updates.paymentStatus !== undefined) updateData.payment_status = updates.paymentStatus;
+    if (updates.paymentMethod !== undefined)
+      updateData.payment_method = updates.paymentMethod ?? null;
     if (updates.paymentReference !== undefined)
       updateData.payment_reference = updates.paymentReference;
     if (updates.paymentDate !== undefined) updateData.payment_date = updates.paymentDate;
@@ -128,6 +159,16 @@ export async function PATCH(
         { error: `Failed to update booking: ${error.message}` },
         { status: 500 }
       );
+    }
+
+    if (actor) {
+      await logAuditAction({
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: actor.role,
+        action: "update_booking",
+        context: params.code,
+      });
     }
 
     return NextResponse.json({ success: true });

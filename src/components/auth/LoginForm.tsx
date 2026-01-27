@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,15 +25,34 @@ export function LoginForm() {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "", rememberMe: false },
   });
+
+  // Prefill email when "remember me" was previously selected
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedEmail = localStorage.getItem("kreastol_last_login_email");
+    if (savedEmail) {
+      setValue("email", savedEmail);
+      setValue("rememberMe", true);
+    }
+  }, [setValue]);
 
   const onSubmit = async (data: LoginValues) => {
     clearError();
     try {
       await login(data);
+      // Persist or clear remembered email
+      if (typeof window !== "undefined") {
+        if (data.rememberMe) {
+          localStorage.setItem("kreastol_last_login_email", data.email);
+        } else {
+          localStorage.removeItem("kreastol_last_login_email");
+        }
+      }
       // Get user from store after login
       const user = useAuthStore.getState().user;
       if (user) {
@@ -106,6 +125,22 @@ export function LoginForm() {
             {errors.password.message}
           </p>
         )}
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="inline-flex items-center space-x-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            {...register("rememberMe")}
+          />
+          <span>Remember me</span>
+        </label>
+        <a
+          href="/forgot-password"
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          Forgot password?
+        </a>
       </div>
       <Button type="submit" fullWidth disabled={isLoading}>
         {isLoading ? "Signing in…" : "Sign in"}

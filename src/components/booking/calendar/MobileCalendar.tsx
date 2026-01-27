@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useRef } from "react";
+import { useState, Fragment, useRef, useEffect } from "react";
 import {
   format,
   addMonths,
@@ -13,6 +13,7 @@ import {
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
+  startOfWeek,
 } from "date-fns";
 import { getDatesInRange } from "@/lib/utils/dateUtils";
 import type { DateSelection, Booking } from "@/types";
@@ -25,6 +26,7 @@ import { formatCurrency } from "@/lib/utils/formatters";
 import { Badge } from "@/components/ui/Badge";
 import { useAuthStore } from "@/store/authStore";
 import { useToast } from "@/components/ui/Toast";
+import { supabaseService } from "@/lib/services/supabaseService";
 
 const MIN_DAY_ROW_WIDTH = 70; // Width for day label column
 const ROOM_COLUMN_WIDTH = 120; // Smaller for mobile
@@ -55,10 +57,20 @@ export function MobileCalendar({
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ room: number; date: string } | null>(null);
-  const [visibleDaysCount, setVisibleDaysCount] = useState(DAYS_PER_VIEW);
-  const [showPastDates, setShowPastDates] = useState(false);
+  const [viewMode, setViewMode] = useState<"week" | "all">("week");
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [blockedOverlay, setBlockedOverlay] = useState<{
+    roomNumber: number;
+    dates: string[];
+    reason: string | null;
+  } | null>(null);
+  const [isBlockedOverlayLoading, setIsBlockedOverlayLoading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const weekAnchorRef = useRef<HTMLDivElement | null>(null);
+  const [activeLegend, setActiveLegend] = useState<
+    "available" | "booked" | "selected" | "blocked" | null
+  >(null);
 
   useCalendarSync();
   const toast = useToast();
@@ -75,54 +87,72 @@ export function MobileCalendar({
   const today = format(todayDate, "yyyy-MM-dd");
   const allDays = eachDayOfInterval({ start, end });
 
-  // Determine the Sunday-Saturday week that contains today (clamped to the current month)
-  const isCurrentMonth =
-    base.getFullYear() === todayDate.getFullYear() &&
-    base.getMonth() === todayDate.getMonth();
+  // Audit: staff viewed calendar
+  const hasLoggedViewRef = useRef(false);
+  useEffect(() => {
+    if (!isStaff || !user || hasLoggedViewRef.current) return;
+    hasLoggedViewRef.current = true;
+    supabaseService
+      .createAuditLog({
+        actorId: user.dbId,
+        actorName: user.name,
+        actorRole: user.role,
+        action: "view_calendar",
+        context: "mobile",
+      })
+      .catch((error) => {
+        console.error("Failed to write audit log (view_calendar mobile):", error);
+      });
+  }, [isStaff, user]);
 
-  let allAvailableDays = allDays;
+  // Build Sunday–Saturday weeks for the month (clamped to month boundaries)
+  const firstWeekStart = startOfWeek(start, { weekStartsOn: 0 });
+  type WeekSegment = { start: Date; end: Date; key: string };
+  const weeks: WeekSegment[] = [];
+  let cursor = firstWeekStart;
 
-  if (isCurrentMonth) {
-    const weekStart = subDays(todayDate, todayDate.getDay()); // Sunday of this week
-    const weekEnd = addDays(weekStart, 6); // Saturday
-
-    const clampedWeekStart = weekStart < start ? start : weekStart;
-    const clampedWeekEnd = weekEnd > end ? end : weekEnd;
-
-    const currentWeekDays = eachDayOfInterval({
-      start: clampedWeekStart,
-      end: clampedWeekEnd,
+  while (cursor <= end) {
+    const weekStart = cursor < start ? start : cursor;
+    const weekEndCandidate = addDays(cursor, 6);
+    const weekEnd = weekEndCandidate > end ? end : weekEndCandidate;
+    weeks.push({
+      start: weekStart,
+      end: weekEnd,
+      key: `${format(weekStart, "yyyy-MM-dd")}_${format(weekEnd, "yyyy-MM-dd")}`,
     });
-
-    const afterWeekDays = allDays.filter(
-      (d) => d > currentWeekDays[currentWeekDays.length - 1]
-    );
-    const beforeWeekDays = allDays.filter((d) => d < currentWeekDays[0]);
-
-    if (showPastDates) {
-      // When expanding past dates, append them starting from the most recent past
-      const pastDaysSorted = [...beforeWeekDays].sort(
-        (a, b) => b.getTime() - a.getTime()
-      );
-      allAvailableDays = [
-        ...currentWeekDays,
-        ...afterWeekDays,
-        ...pastDaysSorted,
-      ];
-    } else {
-      // Default: show the current week first, then remaining days in the month
-      allAvailableDays = [...currentWeekDays, ...afterWeekDays];
-    }
-  } else {
-    // For non-current months, keep simple chronological ordering
-    allAvailableDays = allDays;
+    cursor = addDays(cursor, 7);
   }
 
-  const days = allAvailableDays.slice(0, visibleDaysCount);
-  
-  const hasMoreDays = visibleDaysCount < allAvailableDays.length;
-  const canCollapse = visibleDaysCount > DAYS_PER_VIEW;
-  const hasPastDates = allDays.some((d) => format(d, "yyyy-MM-dd") < today);
+  // Determine active week: either user-selected, or the one containing today, or the first week
+  const findWeekByKey = (key: string | null): WeekSegment | null => {
+    if (!key) return null;
+    return weeks.find((w) => w.key === key) ?? null;
+  };
+
+  const selectedWeek = findWeekByKey(selectedWeekKey);
+
+  const weekContainingToday =
+    base.getFullYear() === todayDate.getFullYear() &&
+    base.getMonth() === todayDate.getMonth()
+      ? weeks.find(
+          (w) => todayDate >= w.start && todayDate <= w.end
+        ) ?? null
+      : null;
+
+  const anchorWeekForAll: WeekSegment | null =
+    selectedWeek || weekContainingToday || weeks[0] || null;
+
+  const activeWeek: WeekSegment | null =
+    viewMode === "week"
+      ? selectedWeek || weekContainingToday || weeks[0] || null
+      : null;
+
+  const anchorDateForAll = anchorWeekForAll?.start ?? null;
+
+  const days =
+    viewMode === "all" || !activeWeek
+      ? allDays
+      : eachDayOfInterval({ start: activeWeek.start, end: activeWeek.end });
 
   // Find booking for a specific room and date
   const findBookingForDate = (roomNumber: number, dateStr: string): Booking | null => {
@@ -137,13 +167,9 @@ export function MobileCalendar({
   };
 
   const handleCellClick = (roomNumber: number, date: string) => {
-    // If staff clicks on a blocked cell, allow unblocking
+    // If staff clicks on a blocked cell, show overlay with details
     if (isRoomBlocked(roomNumber, date) && isStaff) {
-      if (confirm(`Unblock Room ${roomNumber} on ${format(new Date(date), "MMM dd, yyyy")}?`)) {
-        unblockRoom(roomNumber, [date]).then(() =>
-          useBookingStore.getState().fetchBookings()
-        );
-      }
+      openBlockedOverlay(roomNumber, date);
       return;
     }
     
@@ -264,6 +290,119 @@ export function MobileCalendar({
     return "available";
   };
 
+  const openBlockedOverlay = async (roomNumber: number, date: string) => {
+    try {
+      setIsBlockedOverlayLoading(true);
+
+      const response = await fetch(
+        `/api/blocked-rooms?roomNumber=${encodeURIComponent(roomNumber)}`
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || "Failed to load blocked room details");
+        return;
+      }
+
+      const data = await response.json();
+      const details =
+        (data.blockedRoomDetails?.[roomNumber] as
+          | { date: string; reason: string | null }[]
+          | undefined) || [];
+
+      if (!details.length) {
+        toast.error("No blocked dates found for this room");
+        return;
+      }
+
+      const sorted = [...details].sort((a, b) => a.date.localeCompare(b.date));
+      const targetIndex = sorted.findIndex((d) => d.date === date);
+
+      if (targetIndex === -1) {
+        toast.error("Blocked date details not found");
+        return;
+      }
+
+      const baseReason = sorted[targetIndex].reason ?? null;
+      const group: { date: string; reason: string | null }[] = [sorted[targetIndex]];
+
+      // Expand backwards
+      for (let i = targetIndex - 1; i >= 0; i--) {
+        const current = sorted[i];
+        const next = sorted[i + 1];
+        const currentDate = parseISO(current.date);
+        const nextDate = parseISO(next.date);
+        const diffDays =
+          (nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays !== 1 || current.reason !== baseReason) break;
+        group.unshift(current);
+      }
+
+      // Expand forwards
+      for (let i = targetIndex + 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const current = sorted[i];
+        const prevDate = parseISO(prev.date);
+        const currentDate = parseISO(current.date);
+        const diffDays =
+          (currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays !== 1 || current.reason !== baseReason) break;
+        group.push(current);
+      }
+
+      const groupDates = group.map((g) => g.date);
+
+      setBlockedOverlay({
+        roomNumber,
+        dates: groupDates,
+        reason: baseReason,
+      });
+
+      // Audit: staff viewed blocked-room detail from calendar
+      if (isStaff && user) {
+        const first = groupDates[0];
+        const last = groupDates[groupDates.length - 1];
+        const rangeLabel =
+          groupDates.length === 1 ? first : `${first} - ${last}`;
+        supabaseService
+          .createAuditLog({
+            actorId: user.dbId,
+            actorName: user.name,
+            actorRole: user.role,
+            action: "view_blocked_room_detail",
+            context: `room ${roomNumber}: ${rangeLabel}`,
+          })
+          .catch((error) => {
+            console.error(
+              "Failed to write audit log (view_blocked_room_detail mobile):",
+              error
+            );
+          });
+      }
+    } catch (error: any) {
+      console.error("Error loading blocked room details:", error);
+      toast.error(error?.message || "Failed to load blocked room details");
+    } finally {
+      setIsBlockedOverlayLoading(false);
+    }
+  };
+
+  const handleUnblockFromOverlay = async (roomNumber: number, dates: string[]) => {
+    if (!dates.length) return;
+    try {
+      const actor = user
+        ? { id: user.dbId, name: user.name, role: user.role }
+        : undefined;
+      await unblockRoom(roomNumber, dates, actor);
+      await useBookingStore.getState().fetchBookings();
+      setBlockedOverlay(null);
+      toast.success("Room unblocked successfully");
+    } catch (error: any) {
+      console.error("Error unblocking room from overlay:", error);
+      toast.error(error?.message || "Failed to unblock room");
+    }
+  };
+
   // Helper to find booking for a date and determine if it's check-in, check-out, or middle
   const getBookingPosition = (roomNumber: number, dateStr: string): {
     booking: Booking | null;
@@ -334,12 +473,53 @@ export function MobileCalendar({
     }, 500);
   };
 
+  // UI helpers for week selection and scrolling
+  const isTodayInWeek = (week: { start: Date; end: Date }) =>
+    todayDate >= week.start && todayDate <= week.end;
+
+  // Audit: staff viewed booking details from calendar
+  useEffect(() => {
+    if (!isStaff || !user || !selectedBooking) return;
+    supabaseService
+      .createAuditLog({
+        actorId: user.dbId,
+        actorName: user.name,
+        actorRole: user.role,
+        action: "view_booking_from_calendar",
+        context: selectedBooking.bookingCode,
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to write audit log (view_booking_from_calendar mobile):",
+          error
+        );
+      });
+  }, [isStaff, user, selectedBooking]);
+
+  useEffect(() => {
+    if (viewMode === "all" && weekAnchorRef.current && scrollContainerRef.current) {
+      // Keep the anchor week (current/selected) in view when showing all days
+      weekAnchorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [viewMode, base, selectedWeekKey]);
+
+  const legendDescriptions: Record<NonNullable<typeof activeLegend>, string> = {
+    available: "Available",
+    booked: "Not available",
+    selected: "Selected",
+    blocked: "Blocked",
+  };
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
-      {/* Header with month nav */}
-      <div 
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-full overflow-hidden">
+      <div className="overflow-x-auto">
+        <div
+          className="inline-block align-top"
+          style={{ minWidth: gridWidth }}
+        >
+          {/* Header with month nav */}
+          <div 
         className="flex items-center justify-between border-b border-gray-200 py-3 relative"
-        style={{ width: gridWidth }}
       >
         <div className="flex items-center gap-2 px-4">
           <button
@@ -387,42 +567,98 @@ export function MobileCalendar({
           </button>
         </div>
         <div 
-          className="flex items-center gap-3 text-xs text-gray-500 px-3"
-          style={{ position: 'absolute', right: 0 }}
+          className="flex flex-col items-end gap-1 text-xs text-gray-500 px-3"
+          style={{ position: "absolute", right: 0 }}
         >
-          <span className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              setActiveLegend((prev) =>
+                prev === "available" ? null : "available"
+              )
+            }
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-1.5 py-0.5 transition-colors",
+              activeLegend === "available"
+                ? "bg-green-100/70"
+                : "bg-transparent"
+            )}
+          >
             <span className="h-3.5 w-3.5 rounded border border-gray-300 bg-green-100" />
             <span className="hidden sm:inline">Available</span>
-          </span>
-          <span className="flex items-center gap-1.5">
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setActiveLegend((prev) => (prev === "booked" ? null : "booked"))
+            }
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-1.5 py-0.5 transition-colors",
+              activeLegend === "booked"
+                ? "bg-red-100/80"
+                : "bg-transparent"
+            )}
+          >
             <span className="h-3.5 w-3.5 rounded border border-red-200 bg-red-50" />
             <span className="hidden sm:inline">Booked</span>
-          </span>
-          <span className="flex items-center gap-1.5">
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setActiveLegend((prev) =>
+                prev === "selected" ? null : "selected"
+              )
+            }
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-1.5 py-0.5 transition-colors",
+              activeLegend === "selected"
+                ? "bg-primary/10"
+                : "bg-transparent"
+            )}
+          >
             <span className="h-3.5 w-3.5 rounded border border-gray-300 bg-primary/15" />
             <span className="hidden sm:inline">Selected</span>
-          </span>
-          <span className="flex items-center gap-1.5">
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setActiveLegend((prev) =>
+                prev === "blocked" ? null : "blocked"
+              )
+            }
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-1.5 py-0.5 transition-colors",
+              activeLegend === "blocked"
+                ? "bg-orange-200/80"
+                : "bg-transparent"
+            )}
+          >
             <span className="h-3.5 w-3.5 rounded border border-orange-300 bg-orange-200" />
             <span className="hidden sm:inline">Blocked</span>
-          </span>
+          </button>
+          </div>
+          {activeLegend && (
+            <p className="max-w-[11rem] text-[11px] leading-snug text-gray-500 sm:hidden text-right">
+              {legendDescriptions[activeLegend]}
+            </p>
+          )}
         </div>
-      </div>
+          </div>
 
-      {/* Selection status */}
-      {checkIn && !checkOut && selectingRoom && (
+          {/* Selection status */}
+          {checkIn && !checkOut && selectingRoom && (
         <div 
           className="border-b bg-blue-50 px-4 py-2"
-          style={{ width: gridWidth }}
         >
           <p className="text-xs font-medium text-blue-900">
             Select check-out date for {ROOM_CONFIG.rooms.find((r) => r.number === selectingRoom)?.name}
           </p>
         </div>
-      )}
+          )}
 
-      {/* Grid - transposed structure */}
-      <div 
+          {/* Grid - transposed structure */}
+          <div 
         ref={scrollContainerRef} 
         className="overflow-x-auto overflow-y-auto"
         style={maxHeight ? { maxHeight } : undefined}
@@ -470,6 +706,10 @@ export function MobileCalendar({
           {days.map((d, dayIndex) => {
             const dateStr = format(d, "yyyy-MM-dd");
             const isLastRow = dayIndex === days.length - 1;
+            const isAnchorDay =
+              viewMode === "all" &&
+              anchorDateForAll &&
+              d.getTime() === anchorDateForAll.getTime();
 
             return (
               <Fragment key={dateStr}>
@@ -479,6 +719,7 @@ export function MobileCalendar({
                     "sticky left-0 z-10 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-white px-2",
                     isLastRow && "border-b-0"
                   )}
+                  ref={isAnchorDay ? weekAnchorRef : undefined}
                 >
                   <div className="flex flex-col items-center">
                     <span
@@ -599,10 +840,10 @@ export function MobileCalendar({
             );
           })}
           
-          {/* Total Revenue Row */}
+          {/* Total Revenue Row (sticky at bottom) */}
           <>
             {/* Total label */}
-            <div className="sticky left-0 z-10 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-2">
+            <div className="sticky left-0 bottom-0 z-20 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-2">
               <span className="text-sm font-semibold text-foreground">
                 TOTAL
               </span>
@@ -612,12 +853,12 @@ export function MobileCalendar({
             {ROOM_CONFIG.rooms.map((room) => (
               <div
                 key={room.number}
-                className="flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
+                className="sticky bottom-0 z-10 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
               />
             ))}
             
             {/* Total revenue cell */}
-            <div className="flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-2">
+            <div className="sticky bottom-0 z-10 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-2">
               <span className="text-sm font-bold text-foreground">
                 ₦{getTotalRevenue().toLocaleString(undefined, {
                   minimumFractionDigits: 0,
@@ -627,86 +868,58 @@ export function MobileCalendar({
             </div>
           </>
         </div>
-      </div>
+          </div>
 
-      {/* Instructions and expand/collapse */}
-      <div 
-        className="border-t border-gray-200 px-4 py-3 space-y-2"
-        style={{ width: gridWidth }}
+          {/* Instructions and week selector */}
+          <div 
+        className="border-t border-gray-200 px-4 py-3 space-y-3"
       >
         <p className="text-xs text-gray-500">
           Tap a date to set check-in, then tap a later date to set check-out.
         </p>
-        <div className="flex gap-2 flex-wrap">
-          {hasPastDates && !showPastDates && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowPastDates(true);
-                // When expanding to show past dates, keep the current view
-                // and only increase the visible range by a full week if there are more days
-                setVisibleDaysCount((prev) =>
-                  Math.min(prev + DAYS_PER_VIEW, allAvailableDays.length)
-                );
-              }}
-              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
-            >
-              Show past dates
-            </button>
-          )}
-          {hasMoreDays && (
-            <button
-              type="button"
-              onClick={() =>
-                setVisibleDaysCount((prev) =>
-                  Math.min(prev + DAYS_PER_VIEW, allAvailableDays.length)
-                )
-              }
-              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
-            >
-              See next week ({Math.ceil(visibleDaysCount / DAYS_PER_VIEW)}/{Math.ceil(allAvailableDays.length / DAYS_PER_VIEW)})
-            </button>
-          )}
-          {visibleDaysCount < allAvailableDays.length && (
-            <button
-              type="button"
-              onClick={() => setVisibleDaysCount(allAvailableDays.length)}
-              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
-            >
-              See all dates
-            </button>
-          )}
-          {canCollapse && (
-            <button
-              type="button"
-              onClick={() => {
-                setVisibleDaysCount(DAYS_PER_VIEW);
-                // Scroll back to top of grid when collapsing
-                setTimeout(() => {
-                  if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-                    scrollContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                  }
-                }, 100);
-              }}
-              className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors min-h-touch min-w-touch"
-            >
-              Collapse
-            </button>
-          )}
-          {showPastDates && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowPastDates(false);
-                const futureDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
-                setVisibleDaysCount(Math.min(DAYS_PER_VIEW, futureDays.length));
-              }}
-              className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors min-h-touch min-w-touch"
-            >
-              Hide past dates
-            </button>
-          )}
+        <div className="flex flex-wrap gap-2">
+          {weeks.map((week) => {
+            const label = `${format(week.start, "d")}-${format(week.end, "d")}`;
+            const isActive =
+              viewMode === "week" &&
+              activeWeek &&
+              week.key === activeWeek.key;
+            const isCurrent = isTodayInWeek(week);
+            return (
+              <button
+                key={week.key}
+                type="button"
+                onClick={() => {
+                  setViewMode("week");
+                  setSelectedWeekKey(week.key);
+                }}
+                className={cn(
+                  "px-2.5 py-1 text-xs rounded-full border transition-colors min-h-touch",
+                  isActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                  isCurrent && "font-semibold"
+                )}
+              >
+                {label}
+                {isCurrent && " (This week)"}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setViewMode("all")}
+            className={cn(
+              "px-2.5 py-1 text-xs rounded-full border transition-colors min-h-touch",
+              viewMode === "all"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            )}
+          >
+            View all days
+          </button>
+        </div>
+          </div>
         </div>
       </div>
 
@@ -771,17 +984,44 @@ export function MobileCalendar({
                     onChange={async (e) => {
                       const newStatus = e.target.value as "paid" | "unpaid";
                       try {
-                        const { storageService } = await import("@/lib/services/storageService");
-                        await storageService.updateBooking(selectedBooking.bookingCode, {
+                        const { supabaseService } = await import("@/lib/services/supabaseService");
+                        const actorUser = useAuthStore.getState().user;
+                        const isPaid = newStatus === "paid";
+                        const updates = {
                           paymentStatus: newStatus,
-                          paymentDate: newStatus === "paid" ? new Date().toISOString() : null,
-                        });
+                          paymentDate: isPaid ? new Date().toISOString() : null,
+                          paymentMethod: isPaid
+                            ? selectedBooking.paymentMethod ?? "transfer"
+                            : undefined,
+                        };
+
+                        await supabaseService.updateBooking(
+                          selectedBooking.bookingCode,
+                          updates,
+                          actorUser
+                            ? {
+                                id: actorUser.dbId,
+                                name: actorUser.name,
+                                role: actorUser.role,
+                              }
+                            : undefined
+                        );
                         await useBookingStore.getState().fetchBookings();
-                        // Update local state
-                        setSelectedBooking({ ...selectedBooking, paymentStatus: newStatus });
-                        toast.success(`Payment status updated to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`);
+                        setSelectedBooking({
+                          ...selectedBooking,
+                          paymentStatus: newStatus,
+                          paymentDate: updates.paymentDate,
+                          paymentMethod: updates.paymentMethod,
+                        });
+                        toast.success(
+                          `Payment status updated to ${
+                            newStatus.charAt(0).toUpperCase() + newStatus.slice(1)
+                          }`
+                        );
                       } catch (error: any) {
-                        toast.error(error.message || "Failed to update payment status");
+                        toast.error(
+                          error?.message || "Failed to update payment status"
+                        );
                       }
                     }}
                     className="rounded-lg border border-gray-300 bg-white pl-3 pr-8 py-1.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-touch appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22M19%209l-7%207-7-7%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat"
@@ -791,10 +1031,74 @@ export function MobileCalendar({
                   </select>
                 ) : (
                   <Badge
-                    variant={selectedBooking.paymentStatus === "paid" ? "confirmed" : "cancelled"}
+                    variant={
+                      selectedBooking.paymentStatus === "paid"
+                        ? "confirmed"
+                        : "cancelled"
+                    }
                   >
-                    {selectedBooking.paymentStatus.charAt(0).toUpperCase() + selectedBooking.paymentStatus.slice(1)}
+                    {selectedBooking.paymentStatus
+                      .charAt(0)
+                      .toUpperCase() + selectedBooking.paymentStatus.slice(1)}
                   </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Payment Method</span>
+                {isStaff ? (
+                  <select
+                    value={selectedBooking.paymentMethod ?? ""}
+                    disabled={selectedBooking.paymentStatus !== "paid"}
+                    onChange={async (e) => {
+                      const newMethod = e.target.value as "card" | "transfer";
+                      if (selectedBooking.paymentStatus !== "paid") {
+                        toast.error(
+                          "Payment method can only be set when status is Paid"
+                        );
+                        return;
+                      }
+
+                      try {
+                        const { supabaseService } = await import("@/lib/services/supabaseService");
+                        const actorUser = useAuthStore.getState().user;
+
+                        await supabaseService.updateBooking(
+                          selectedBooking.bookingCode,
+                          { paymentMethod: newMethod },
+                          actorUser
+                            ? {
+                                id: actorUser.dbId,
+                                name: actorUser.name,
+                                role: actorUser.role,
+                              }
+                            : undefined
+                        );
+                        await useBookingStore.getState().fetchBookings();
+                        setSelectedBooking({
+                          ...selectedBooking,
+                          paymentMethod: newMethod,
+                        });
+                        toast.success("Payment method updated");
+                      } catch (error: any) {
+                        toast.error(
+                          error?.message || "Failed to update payment method"
+                        );
+                      }
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white pl-3 pr-8 py-1.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-touch appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22M19%209l-7%207-7-7%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat"
+                  >
+                    <option value="">Select method</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="card">Card</option>
+                  </select>
+                ) : selectedBooking.paymentStatus === "paid" &&
+                  selectedBooking.paymentMethod ? (
+                  <span className="text-sm font-medium capitalize">
+                    {selectedBooking.paymentMethod}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">Not set</span>
                 )}
               </div>
               
@@ -811,6 +1115,89 @@ export function MobileCalendar({
                   <span className="text-sm font-medium">{selectedBooking.guestEmail}</span>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Blocked Room Details Modal (staff only) */}
+      <Modal
+        isOpen={!!blockedOverlay}
+        onClose={() => setBlockedOverlay(null)}
+        title="Blocked Room Details"
+      >
+        {blockedOverlay && (
+          <div className="p-4 sm:p-6 space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                Room{" "}
+                <span className="font-semibold">
+                  {blockedOverlay.roomNumber}
+                </span>{" "}
+                is blocked for{" "}
+                <span className="font-semibold">
+                  {blockedOverlay.dates.length} night
+                  {blockedOverlay.dates.length !== 1 ? "s" : ""}
+                </span>
+                .
+              </p>
+              <p className="text-sm text-gray-600">
+                Reason:{" "}
+                <span className="font-semibold">
+                  {blockedOverlay.reason || "Not specified"}
+                </span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500">
+                Blocked nights
+              </p>
+              <ul className="max-h-40 overflow-y-auto space-y-1 text-sm text-gray-700">
+                {blockedOverlay.dates.map((d) => (
+                  <li key={d} className="flex items-center justify-between">
+                    <span>{format(new Date(d), "MMM dd, yyyy")}</span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
+                      disabled={isBlockedOverlayLoading}
+                      onClick={() =>
+                        handleUnblockFromOverlay(
+                          blockedOverlay.roomNumber,
+                          [d]
+                        )
+                      }
+                    >
+                      Unblock this night
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                className="inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => setBlockedOverlay(null)}
+                disabled={isBlockedOverlayLoading}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="inline-flex justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+                disabled={isBlockedOverlayLoading}
+                onClick={() =>
+                  blockedOverlay &&
+                  handleUnblockFromOverlay(
+                    blockedOverlay.roomNumber,
+                    blockedOverlay.dates
+                  )
+                }
+              >
+                Unblock all nights
+              </button>
             </div>
           </div>
         )}

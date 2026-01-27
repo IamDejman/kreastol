@@ -15,13 +15,14 @@ interface DbUser {
 }
 
 function dbUserToUser(dbUser: DbUser): User {
-  const numericId = parseInt(dbUser.id.replace(/-/g, "").substring(0, 8), 16) % 1000000;
+  const numericId =
+    parseInt(dbUser.id.replace(/-/g, "").substring(0, 8), 16) % 1000000;
   return {
     id: numericId,
     dbId: dbUser.id,
     name: dbUser.name,
     email: dbUser.email,
-    password: dbUser.password,
+    // Do not expose password hashes
     role: dbUser.role,
     status: (dbUser.status as UserStatus) || "active",
   };

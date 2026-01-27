@@ -8,18 +8,19 @@ interface SelectOption {
   label: string;
 }
 
-interface SelectProps extends Omit<
-  React.SelectHTMLAttributes<HTMLSelectElement>,
-  "children"
-> {
+interface SelectProps
+  extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "children"> {
   label?: string;
   error?: string;
-  options: SelectOption[];
+  options?: SelectOption[];
   placeholder?: string;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, options, placeholder, id, ...props }, ref) => {
+  (
+    { className, label, error, options = [], placeholder, id, ...props },
+    ref
+  ) => {
     const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
     return (
       <div className="w-full">

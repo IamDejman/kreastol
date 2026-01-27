@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Booking, DateSelection, BookingFormData } from "@/types";
+import type { Booking, DateSelection, BookingFormData, User } from "@/types";
 import { bookingService } from "@/lib/services/bookingService";
 import { storageService } from "@/lib/services/storageService";
 
@@ -18,8 +18,17 @@ interface BookingStore {
   selectDates: (selection: DateSelection | null) => void;
   syncCalendar: () => Promise<void>;
   clearSelection: () => void;
-  blockRoom: (roomNumber: number, dates: string[], reason?: string) => Promise<void>;
-  unblockRoom: (roomNumber: number, dates: string[]) => Promise<void>;
+  blockRoom: (
+    roomNumber: number,
+    dates: string[],
+    reason: string,
+    actor?: { id: string; name: string; role: User["role"] }
+  ) => Promise<void>;
+  unblockRoom: (
+    roomNumber: number,
+    dates: string[],
+    actor?: { id: string; name: string; role: User["role"] }
+  ) => Promise<void>;
   isRoomBlocked: (roomNumber: number, date: string) => boolean;
 }
 
@@ -96,10 +105,10 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
 
   clearSelection: () => set({ selectedDates: null }),
 
-  blockRoom: async (roomNumber, dates, reason) => {
+  blockRoom: async (roomNumber, dates, reason, actor) => {
     try {
       const { supabaseService } = await import("@/lib/services/supabaseService");
-      await supabaseService.blockRoom(roomNumber, dates, reason);
+      await supabaseService.blockRoom(roomNumber, dates, reason, actor);
       // Refresh blocked rooms from database
       const blockedRooms = await supabaseService.getBlockedRooms();
       set({ blockedRooms });
@@ -109,10 +118,10 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
     }
   },
 
-  unblockRoom: async (roomNumber, dates) => {
+  unblockRoom: async (roomNumber, dates, actor) => {
     try {
       const { supabaseService } = await import("@/lib/services/supabaseService");
-      await supabaseService.unblockRoom(roomNumber, dates);
+      await supabaseService.unblockRoom(roomNumber, dates, actor);
       // Refresh blocked rooms from database
       const blockedRooms = await supabaseService.getBlockedRooms();
       set({ blockedRooms });

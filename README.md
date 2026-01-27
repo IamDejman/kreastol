@@ -42,18 +42,6 @@ npm run build
 npm start
 ```
 
-## Default Login Credentials
-
-### Owner
-
-- **Email:** `owner@kreastol.com`
-- **Password:** `owner123`
-
-### Receptionist
-
-- **Email:** `desk@kreastol.com`
-- **Password:** `desk123`
-
 ## Room Rates
 
 - **Room 1:** ₦30,000/night (Deluxe Suite)

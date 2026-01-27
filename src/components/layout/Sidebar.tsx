@@ -19,6 +19,8 @@ const ownerLinks = [
   { href: "/owner/bookings", label: "Bookings" },
   { href: "/owner/guests", label: "Guests" },
   { href: "/owner/revenue", label: "Revenue" },
+  { href: "/owner/users", label: "Team" },
+  { href: "/owner/audit-log", label: "Audit log" },
 ];
 
 const receptionistLinks = [

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
-import type { Booking, PaymentStatus } from "@/types";
+import type { Booking, PaymentStatus, UserRole } from "@/types";
 
 // Database types
 interface DbBooking {
@@ -20,6 +20,7 @@ interface DbBooking {
   bank_name: string;
   account_name: string;
   payment_status: string;
+  payment_method: string | null;
   payment_reference: string | null;
   payment_date: string | null;
   created_at: string;
@@ -47,6 +48,7 @@ function dbBookingToBooking(dbBooking: DbBooking): Booking {
     bankName: dbBooking.bank_name,
     accountName: dbBooking.account_name,
     paymentStatus: normalizePaymentStatus(dbBooking.payment_status),
+    paymentMethod: (dbBooking.payment_method as Booking["paymentMethod"]) ?? undefined,
     paymentReference: dbBooking.payment_reference,
     paymentDate: dbBooking.payment_date,
     createdAt: dbBooking.created_at,
@@ -71,9 +73,33 @@ function bookingToDbBooking(booking: Booking): Omit<DbBooking, "id" | "created_a
     bank_name: booking.bankName,
     account_name: booking.accountName,
     payment_status: booking.paymentStatus,
+    payment_method: booking.paymentMethod ?? null,
     payment_reference: booking.paymentReference,
     payment_date: booking.paymentDate,
   };
+}
+
+async function logAuditAction(params: {
+  actorId?: string;
+  actorName?: string;
+  actorRole?: UserRole;
+  action: string;
+  context?: string;
+}) {
+  const { actorId, actorName, actorRole, action, context } = params;
+  if (!actorId || !actorName || !actorRole) return;
+
+  const { error } = await supabase.from("audit_logs").insert({
+    actor_id: actorId,
+    actor_name: actorName,
+    actor_role: actorRole,
+    action,
+    context: context ?? null,
+  });
+
+  if (error) {
+    console.error("Failed to write audit log (bookings):", error);
+  }
 }
 
 // GET /api/bookings - Get all bookings
@@ -109,7 +135,11 @@ export async function GET() {
 // POST /api/bookings - Create a new booking
 export async function POST(request: NextRequest) {
   try {
-    const booking: Booking = await request.json();
+    const body = await request.json();
+    const booking: Booking = body.booking ?? body;
+    const actor = body.actor as
+      | { id: string; name: string; role: UserRole }
+      | undefined;
     const dbBooking = bookingToDbBooking(booking);
     
     const { error } = await supabase.from("bookings").insert(dbBooking);
@@ -120,6 +150,16 @@ export async function POST(request: NextRequest) {
         { error: `Failed to save booking: ${error.message}` },
         { status: 500 }
       );
+    }
+
+    if (actor) {
+      await logAuditAction({
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: actor.role,
+        action: "create_booking",
+        context: `${booking.bookingCode} - ${booking.guestName}`,
+      });
     }
 
     return NextResponse.json({ success: true }, { status: 201 });

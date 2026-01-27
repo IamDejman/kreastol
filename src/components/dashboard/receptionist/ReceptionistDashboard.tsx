@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { Filter } from "lucide-react";
 import { useBookings } from "@/hooks/useBookings";
 import { useVisibilityChange } from "@/hooks/useVisibilityChange";
-import { useIsMobile } from "@/hooks/useMediaQuery";
+import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { POLLING_INTERVALS } from "@/lib/constants/config";
 import { ReceptionistBookingsTable } from "./ReceptionistBookingsTable";
 import { ReceptionistMobileBookingsTable } from "./ReceptionistMobileBookingsTable";
@@ -17,6 +17,7 @@ export function ReceptionistDashboard() {
   const { bookings, refresh } = useBookings();
   const isVisible = useVisibilityChange();
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const [search, setSearch] = useState("");
   const [roomFilter, setRoomFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
@@ -146,7 +147,7 @@ export function ReceptionistDashboard() {
         />
       </div>
 
-      {isMobile ? (
+      {isMobile || isTablet ? (
         <ReceptionistMobileBookingsTable bookings={paginatedBookings} />
       ) : (
         <ReceptionistBookingsTable bookings={paginatedBookings} />

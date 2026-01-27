@@ -15,7 +15,13 @@ export interface User {
   dbId: string;
   name: string;
   email: string;
-  password: string;
+  /**
+   * Hashed password stored in the database.
+   * This should never contain a plain text password and is generally
+   * not sent to the client. It is kept optional so that API responses
+   * can omit it entirely.
+   */
+  password?: string;
   role: UserRole;
   status: UserStatus;
 }
@@ -28,4 +34,5 @@ export interface AuthState {
 export interface LoginCredentials {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }

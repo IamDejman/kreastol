@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -11,12 +10,12 @@ import {
 import type { DateSelection } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { useAuthStore } from "@/store/authStore";
 import { useBookingStore } from "@/store/bookingStore";
 import { useToast } from "@/components/ui/Toast";
 import { format } from "date-fns";
 import { getDatesInRange } from "@/lib/utils/dateUtils";
-import { Lock } from "lucide-react";
 
 interface BookingFormProps {
   selection: DateSelection;
@@ -29,19 +28,22 @@ export function BookingForm({
   onSubmit,
   isLoading = false,
 }: BookingFormProps) {
-  const router = useRouter();
   const toast = useToast();
   const user = useAuthStore((s) => s.user);
   const isStaff = user && (user.role === "owner" || user.role === "receptionist");
-  const blockRoom = useBookingStore((s) => s.blockRoom);
-  const fetchBookings = useBookingStore((s) => s.fetchBookings);
-  const bookedDates = useBookingStore((s) => s.bookedDates);
+  const { blockRoom, fetchBookings } = useBookingStore((s) => ({
+    blockRoom: s.blockRoom,
+    fetchBookings: s.fetchBookings,
+  }));
   const [blockReason, setBlockReason] = useState("");
-  const [isBlocking, setIsBlocking] = useState(false);
+  const [isBlockingDates, setIsBlockingDates] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
   
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -49,40 +51,64 @@ export function BookingForm({
       guestName: "",
       guestPhone: "",
       guestEmail: "",
+      paymentStatus: "unpaid",
+      paymentMethod: "transfer",
     },
   });
 
-  const handleBlockDates = async () => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const dates = getDatesInRange(selection.checkIn, selection.checkOut);
-    
-    // Check if any dates are in the past
-    const pastDates = dates.filter((d) => d < today);
-    if (pastDates.length > 0) {
-      toast.error(`Cannot block past dates. Past dates in selection: ${pastDates.join(", ")}`);
-      return;
-    }
-    
-    // Check if any dates are already booked
-    const roomBookedDates = bookedDates[selection.roomNumber] || [];
-    const conflictingDates = dates.filter((d) => roomBookedDates.includes(d));
-    
-    if (conflictingDates.length > 0) {
-      toast.error(`Cannot block dates that are already booked. Conflicting dates: ${conflictingDates.join(", ")}`);
-      return;
-    }
-    
-    setIsBlocking(true);
+  const paymentStatus = watch("paymentStatus");
+
+  // Ensure business rule: if not paid, clear payment method
+  if (paymentStatus !== "paid") {
+    setValue("paymentMethod", undefined);
+  }
+
+  const handleBlockDatesInstead = async () => {
     try {
-      await blockRoom(selection.roomNumber, dates, blockReason || undefined);
+      setBlockError(null);
+
+      if (!selection) {
+        setBlockError("No dates selected to block.");
+        return;
+      }
+
+      if (!blockReason.trim()) {
+        setBlockError("Please provide a reason for blocking these dates.");
+        return;
+      }
+
+      const dates = getDatesInRange(selection.checkIn, selection.checkOut);
+      if (dates.length === 0) {
+        setBlockError("There are no nights in the selected range to block.");
+        return;
+      }
+
+      if (!isStaff) {
+        setBlockError("Only staff can block dates.");
+        return;
+      }
+
+      setIsBlockingDates(true);
+
+      const actor =
+        user && user.dbId && user.name && user.role
+          ? { id: user.dbId, name: user.name, role: user.role }
+          : undefined;
+
+      await blockRoom(selection.roomNumber, dates, blockReason.trim(), actor);
       await fetchBookings();
-      toast.success(`Room ${selection.roomNumber} blocked from ${format(new Date(selection.checkIn), "MMM dd")} to ${format(new Date(selection.checkOut), "MMM dd, yyyy")}`);
-      // Redirect back to home
-      router.push("/");
+
+      toast.success(
+        dates.length === 1
+          ? "Room has been blocked for 1 night."
+          : `Room has been blocked for ${dates.length} nights.`
+      );
+
+      setBlockReason("");
     } catch (error: any) {
-      toast.error(error.message || "Failed to block dates");
+      setBlockError(error?.message || "Failed to block dates.");
     } finally {
-      setIsBlocking(false);
+      setIsBlockingDates(false);
     }
   };
 
@@ -90,50 +116,69 @@ export function BookingForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <Input
         label="Full name"
-        placeholder="John Doe"
         error={errors.guestName?.message}
         {...register("guestName")}
       />
       <Input
         label="Phone"
         type="tel"
-        placeholder="+234 800 000 0000"
         error={errors.guestPhone?.message}
         {...register("guestPhone")}
       />
       <Input
         label="Email"
         type="email"
-        placeholder="john@example.com"
         error={errors.guestEmail?.message}
         {...register("guestEmail")}
       />
-      <Button type="submit" fullWidth disabled={isLoading || isBlocking}>
+      {isStaff && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Select
+            label="Payment status"
+            options={[
+              { label: "Unpaid", value: "unpaid" },
+              { label: "Paid", value: "paid" },
+            ]}
+            defaultValue="unpaid"
+            {...register("paymentStatus")}
+          />
+          <Select
+            label="Payment method"
+            options={[
+              { label: "Transfer", value: "transfer" },
+              { label: "Card", value: "card" },
+            ]}
+            defaultValue="transfer"
+            disabled={paymentStatus !== "paid"}
+            {...register("paymentMethod")}
+          />
+        </div>
+      )}
+      <Button type="submit" fullWidth disabled={isLoading}>
         {isLoading ? "Creating…" : "Continue"}
       </Button>
 
       {isStaff && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <Lock className="h-4 w-4" />
-            <span>Staff Option: Block Dates Instead</span>
-          </div>
+        <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="text-sm font-semibold text-foreground">
+            Block Dates Instead
+          </p>
           <Input
-            label="Reason (Optional)"
-            type="text"
+            label="Reason"
             value={blockReason}
             onChange={(e) => setBlockReason(e.target.value)}
-            placeholder="e.g., Under repairs, Maintenance"
-            className="min-h-touch"
+            error={blockError ?? undefined}
           />
           <Button
             type="button"
-            onClick={handleBlockDates}
-            disabled={isBlocking}
             variant="secondary"
             fullWidth
+            disabled={isBlockingDates}
+            onClick={handleBlockDatesInstead}
           >
-            {isBlocking ? "Blocking..." : "Block Dates Instead"}
+            {isBlockingDates
+              ? "Blocking dates..."
+              : "Block Date" /* label is generic; nights are taken from selected range */}
           </Button>
         </div>
       )}

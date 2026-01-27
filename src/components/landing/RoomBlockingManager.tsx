@@ -41,6 +41,11 @@ export function RoomBlockingManager() {
       return;
     }
 
+    if (!reason.trim()) {
+      setError("Please provide a reason for blocking this room");
+      return;
+    }
+
     if (startDate > endDate) {
       setError("End date must be on or after start date");
       return;
@@ -70,7 +75,10 @@ export function RoomBlockingManager() {
     setIsLoading(true);
 
     try {
-      await blockRoom(selectedRoom, dates, reason || undefined);
+      const actor = user
+        ? { id: user.dbId, name: user.name, role: user.role }
+        : undefined;
+      await blockRoom(selectedRoom, dates, reason.trim(), actor);
       await fetchBookings(); // Refresh to update calendar
       setStartDate("");
       setEndDate("");
@@ -85,7 +93,10 @@ export function RoomBlockingManager() {
   const handleUnblock = async (date: string) => {
     setIsLoading(true);
     try {
-      await unblockRoom(selectedRoom, [date]);
+      const actor = user
+        ? { id: user.dbId, name: user.name, role: user.role }
+        : undefined;
+      await unblockRoom(selectedRoom, [date], actor);
       await fetchBookings(); // Refresh to update calendar
     } catch (err: any) {
       setError(err.message || "Failed to unblock room");
@@ -97,7 +108,10 @@ export function RoomBlockingManager() {
   const handleUnblockRange = async (dates: string[]) => {
     setIsLoading(true);
     try {
-      await unblockRoom(selectedRoom, dates);
+      const actor = user
+        ? { id: user.dbId, name: user.name, role: user.role }
+        : undefined;
+      await unblockRoom(selectedRoom, dates, actor);
       await fetchBookings(); // Refresh to update calendar
     } catch (err: any) {
       setError(err.message || "Failed to unblock dates");
@@ -209,7 +223,7 @@ export function RoomBlockingManager() {
 
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">
-                Reason (Optional)
+                Reason
               </label>
               <Input
                 type="text"
