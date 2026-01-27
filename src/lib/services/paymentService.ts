@@ -29,15 +29,6 @@ export async function verifyPayment(bookingCode: string): Promise<PaymentVerific
     };
   }
 
-  if (booking.paymentStatus === "credit") {
-    return {
-      status: "successful",
-      reference: booking.paymentReference ?? undefined,
-      amount: booking.totalAmount,
-      paidAt: booking.paymentDate ?? undefined,
-    };
-  }
-
   const elapsed = Date.now() - (await getCreatedAt(bookingCode));
   const delay = PAYMENT_CONFIG.autoConfirmDelay;
   const remaining = Math.max(0, Math.ceil((delay - elapsed) / 1000));

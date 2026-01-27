@@ -522,9 +522,7 @@ export function MobileCalendar({
                           <div
                             className={cn(
                               "h-2 w-2 rounded-full",
-                              bookingPos.booking.paymentStatus === "paid" && "bg-green-500",
-                              bookingPos.booking.paymentStatus === "credit" && "bg-yellow-500",
-                              bookingPos.booking.paymentStatus === "unpaid" && "bg-red-500"
+                              bookingPos.booking.paymentStatus === "paid" ? "bg-green-500" : "bg-red-500"
                             )}
                             title={`Payment: ${bookingPos.booking.paymentStatus}`}
                           />

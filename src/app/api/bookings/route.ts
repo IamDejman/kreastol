@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
-import type { Booking } from "@/types";
+import type { Booking, PaymentStatus } from "@/types";
 
 // Database types
 interface DbBooking {
@@ -26,6 +26,10 @@ interface DbBooking {
   updated_at: string;
 }
 
+function normalizePaymentStatus(raw: string): PaymentStatus {
+  return raw === "paid" ? "paid" : "unpaid";
+}
+
 function dbBookingToBooking(dbBooking: DbBooking): Booking {
   return {
     bookingCode: dbBooking.booking_code,
@@ -42,7 +46,7 @@ function dbBookingToBooking(dbBooking: DbBooking): Booking {
     accountNumber: dbBooking.account_number,
     bankName: dbBooking.bank_name,
     accountName: dbBooking.account_name,
-    paymentStatus: dbBooking.payment_status as "paid" | "credit" | "unpaid",
+    paymentStatus: normalizePaymentStatus(dbBooking.payment_status),
     paymentReference: dbBooking.payment_reference,
     paymentDate: dbBooking.payment_date,
     createdAt: dbBooking.created_at,

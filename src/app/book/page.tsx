@@ -37,6 +37,7 @@ function BookPageContent() {
   const searchParams = useSearchParams();
   const [selection, setSelection] = useState<DateSelection | null>(null);
   const [checked, setChecked] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createBooking = useBookingStore((s) => s.createBooking);
   const toast = useToast();
@@ -53,12 +54,15 @@ function BookPageContent() {
 
   const handleSubmit = async (data: BookingFormValues) => {
     if (!selection) return;
+    setIsSubmitting(true);
     try {
       const booking = await createBooking(selection, data);
       toast.success("Booking confirmed successfully!");
       router.push(`/booking/${booking.bookingCode}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Booking failed.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -80,7 +84,11 @@ function BookPageContent() {
         <p className="mt-2 text-gray-600">Enter your details to confirm.</p>
         <div className="mt-8 space-y-6">
           <BookingSummary selection={selection} />
-          <BookingForm selection={selection} onSubmit={handleSubmit} />
+          <BookingForm
+            selection={selection}
+            onSubmit={handleSubmit}
+            isLoading={isSubmitting}
+          />
         </div>
       </div>
     </div>

@@ -108,7 +108,10 @@ export function BookingForm({
         error={errors.guestEmail?.message}
         {...register("guestEmail")}
       />
-      
+      <Button type="submit" fullWidth disabled={isLoading || isBlocking}>
+        {isLoading ? "Creating…" : "Continue"}
+      </Button>
+
       {isStaff && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -134,10 +137,6 @@ export function BookingForm({
           </Button>
         </div>
       )}
-      
-      <Button type="submit" fullWidth disabled={isLoading || isBlocking}>
-        {isLoading ? "Creating…" : "Continue"}
-      </Button>
     </form>
   );
 }
