@@ -200,7 +200,10 @@ export function MobileCalendar({
     if (isRoomBlocked(roomNumber, date)) return "blocked";
     
     const roomDates = bookedDates[roomNumber] ?? [];
-    if (roomDates.includes(date) || date < today) return "booked";
+    // Only show as booked if there is an actual booking
+    if (roomDates.includes(date)) return "booked";
+    // Past dates without bookings should not look booked
+    if (date < today) return "available";
     if (selectingRoom !== roomNumber) return "available";
 
     if (date === checkIn) return "selected";
