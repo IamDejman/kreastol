@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 function LoginPageContent() {
@@ -65,11 +64,6 @@ function LoginPageContent() {
         <div className="mt-6">
           <LoginForm />
         </div>
-        <p className="mt-6 text-center text-sm text-gray-500">
-          <Link href="/" className="text-primary hover:underline">
-            ← Back to home
-          </Link>
-        </p>
       </div>
     </div>
   );

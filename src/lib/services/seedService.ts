@@ -17,7 +17,6 @@ export async function seedDefaultUsers(): Promise<void> {
             password: user.password,
             role: user.role,
           });
-          console.log(`Seeded default user: ${user.email}`);
         } catch (createError: any) {
           // Ignore duplicate key errors (user might have been created between check and insert)
           // Also ignore errors about user already existing (API now returns 200 for existing users)
@@ -26,14 +25,13 @@ export async function seedDefaultUsers(): Promise<void> {
             createError?.message?.includes("already exists") ||
             createError?.code === "23505"
           ) {
-            console.log(`User ${user.email} already exists, skipping`);
+            // Silently skip - user already exists
           } else {
             console.error(`Error creating user ${user.email}:`, createError);
           }
         }
-      } else {
-        console.log(`User ${user.email} already exists, skipping`);
       }
+      // Silently skip if user already exists
     }
   } catch (error) {
     console.error("Error seeding default users:", error);
