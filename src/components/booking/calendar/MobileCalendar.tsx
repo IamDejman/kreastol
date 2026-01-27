@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, Fragment, useRef, useEffect } from "react";
+import { useState, Fragment, useRef } from "react";
 import {
   format,
   addMonths,
   subMonths,
   subDays,
+  addDays,
   parseISO,
   isBefore,
   isWithinInterval,
@@ -27,6 +28,7 @@ import { useToast } from "@/components/ui/Toast";
 
 const MIN_DAY_ROW_WIDTH = 70; // Width for day label column
 const ROOM_COLUMN_WIDTH = 120; // Smaller for mobile
+const DAYS_PER_VIEW = 7; // Always show full weeks (Sun-Sat)
 
 function formatOrdinalDate(date: Date): string {
   const day = date.getDate();
@@ -36,18 +38,24 @@ function formatOrdinalDate(date: Date): string {
 interface MobileCalendarProps {
   onDateSelect: (selection: DateSelection) => void;
   initialRoom?: number;
+  /**
+   * Optional max height for the scrollable grid container (e.g. "70vh" or 400).
+   * When provided, the calendar body becomes vertically scrollable while headers stay sticky.
+   */
+  maxHeight?: string | number;
 }
 
 export function MobileCalendar({
   onDateSelect,
   initialRoom = 1,
+  maxHeight,
 }: MobileCalendarProps) {
   const [base, setBase] = useState(() => new Date());
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ room: number; date: string } | null>(null);
-  const [visibleDaysCount, setVisibleDaysCount] = useState(6);
+  const [visibleDaysCount, setVisibleDaysCount] = useState(DAYS_PER_VIEW);
   const [showPastDates, setShowPastDates] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -56,31 +64,64 @@ export function MobileCalendar({
   const toast = useToast();
   const bookedDates = useBookingStore((s) => s.bookedDates);
   const bookings = useBookingStore((s) => s.bookings);
-  const fetchBookings = useBookingStore((s) => s.fetchBookings);
   const isRoomBlocked = useBookingStore((s) => s.isRoomBlocked);
   const unblockRoom = useBookingStore((s) => s.unblockRoom);
   const user = useAuthStore((s) => s.user);
   const isStaff = user && (user.role === "owner" || user.role === "receptionist");
 
-  // Ensure bookings are loaded
-  useEffect(() => {
-    if (bookings.length === 0) {
-      fetchBookings();
-    }
-  }, [bookings.length, fetchBookings]);
-
   const start = startOfMonth(base);
   const end = endOfMonth(base);
-  const today = format(new Date(), "yyyy-MM-dd");
+  const todayDate = new Date();
+  const today = format(todayDate, "yyyy-MM-dd");
   const allDays = eachDayOfInterval({ start, end });
-  // Filter days based on showPastDates: if false, only show future dates; if true, show all
-  const allAvailableDays = showPastDates 
-    ? allDays 
-    : allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+
+  // Determine the Sunday-Saturday week that contains today (clamped to the current month)
+  const isCurrentMonth =
+    base.getFullYear() === todayDate.getFullYear() &&
+    base.getMonth() === todayDate.getMonth();
+
+  let allAvailableDays = allDays;
+
+  if (isCurrentMonth) {
+    const weekStart = subDays(todayDate, todayDate.getDay()); // Sunday of this week
+    const weekEnd = addDays(weekStart, 6); // Saturday
+
+    const clampedWeekStart = weekStart < start ? start : weekStart;
+    const clampedWeekEnd = weekEnd > end ? end : weekEnd;
+
+    const currentWeekDays = eachDayOfInterval({
+      start: clampedWeekStart,
+      end: clampedWeekEnd,
+    });
+
+    const afterWeekDays = allDays.filter(
+      (d) => d > currentWeekDays[currentWeekDays.length - 1]
+    );
+    const beforeWeekDays = allDays.filter((d) => d < currentWeekDays[0]);
+
+    if (showPastDates) {
+      // When expanding past dates, append them starting from the most recent past
+      const pastDaysSorted = [...beforeWeekDays].sort(
+        (a, b) => b.getTime() - a.getTime()
+      );
+      allAvailableDays = [
+        ...currentWeekDays,
+        ...afterWeekDays,
+        ...pastDaysSorted,
+      ];
+    } else {
+      // Default: show the current week first, then remaining days in the month
+      allAvailableDays = [...currentWeekDays, ...afterWeekDays];
+    }
+  } else {
+    // For non-current months, keep simple chronological ordering
+    allAvailableDays = allDays;
+  }
+
   const days = allAvailableDays.slice(0, visibleDaysCount);
   
   const hasMoreDays = visibleDaysCount < allAvailableDays.length;
-  const canCollapse = visibleDaysCount > 6;
+  const canCollapse = visibleDaysCount > DAYS_PER_VIEW;
   const hasPastDates = allDays.some((d) => format(d, "yyyy-MM-dd") < today);
 
   // Find booking for a specific room and date
@@ -99,7 +140,9 @@ export function MobileCalendar({
     // If staff clicks on a blocked cell, allow unblocking
     if (isRoomBlocked(roomNumber, date) && isStaff) {
       if (confirm(`Unblock Room ${roomNumber} on ${format(new Date(date), "MMM dd, yyyy")}?`)) {
-        unblockRoom(roomNumber, [date]).then(() => fetchBookings());
+        unblockRoom(roomNumber, [date]).then(() =>
+          useBookingStore.getState().fetchBookings()
+        );
       }
       return;
     }
@@ -381,7 +424,8 @@ export function MobileCalendar({
       {/* Grid - transposed structure */}
       <div 
         ref={scrollContainerRef} 
-        className="overflow-x-auto"
+        className="overflow-x-auto overflow-y-auto"
+        style={maxHeight ? { maxHeight } : undefined}
         onMouseLeave={handleGridMouseLeave}
       >
         <div
@@ -599,8 +643,10 @@ export function MobileCalendar({
               type="button"
               onClick={() => {
                 setShowPastDates(true);
+                // When expanding to show past dates, keep the current view
+                // and only increase the visible range by a full week if there are more days
                 setVisibleDaysCount((prev) =>
-                  Math.min(prev + 6, allDays.length)
+                  Math.min(prev + DAYS_PER_VIEW, allAvailableDays.length)
                 );
               }}
               className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
@@ -613,19 +659,28 @@ export function MobileCalendar({
               type="button"
               onClick={() =>
                 setVisibleDaysCount((prev) =>
-                  Math.min(prev + 6, allAvailableDays.length)
+                  Math.min(prev + DAYS_PER_VIEW, allAvailableDays.length)
                 )
               }
               className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
             >
-              See more dates ({visibleDaysCount}/{allAvailableDays.length})
+              See next week ({Math.ceil(visibleDaysCount / DAYS_PER_VIEW)}/{Math.ceil(allAvailableDays.length / DAYS_PER_VIEW)})
+            </button>
+          )}
+          {visibleDaysCount < allAvailableDays.length && (
+            <button
+              type="button"
+              onClick={() => setVisibleDaysCount(allAvailableDays.length)}
+              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
+            >
+              See all dates
             </button>
           )}
           {canCollapse && (
             <button
               type="button"
               onClick={() => {
-                setVisibleDaysCount(6);
+                setVisibleDaysCount(DAYS_PER_VIEW);
                 // Scroll back to top of grid when collapsing
                 setTimeout(() => {
                   if (scrollContainerRef.current) {
@@ -645,7 +700,7 @@ export function MobileCalendar({
               onClick={() => {
                 setShowPastDates(false);
                 const futureDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
-                setVisibleDaysCount(Math.min(6, futureDays.length));
+                setVisibleDaysCount(Math.min(DAYS_PER_VIEW, futureDays.length));
               }}
               className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors min-h-touch min-w-touch"
             >
@@ -721,7 +776,7 @@ export function MobileCalendar({
                           paymentStatus: newStatus,
                           paymentDate: newStatus === "paid" ? new Date().toISOString() : null,
                         });
-                        await fetchBookings();
+                        await useBookingStore.getState().fetchBookings();
                         // Update local state
                         setSelectedBooking({ ...selectedBooking, paymentStatus: newStatus });
                         toast.success(`Payment status updated to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`);

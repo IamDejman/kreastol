@@ -9,7 +9,7 @@ export function HeroSection() {
       <div className="relative h-[50vh] min-h-[320px] md:h-[60vh]">
         <Image
           src="/images/hero-mobile.jpg"
-          alt="Kreastol Luxury Suite"
+          alt="No13teen"
           fill
           className="object-cover md:hidden"
           priority
@@ -17,7 +17,7 @@ export function HeroSection() {
         />
         <Image
           src="/images/hero-tablet.jpg"
-          alt="Kreastol Luxury Suite"
+          alt="No13teen"
           fill
           className="hidden object-cover md:block lg:hidden"
           priority
@@ -25,7 +25,7 @@ export function HeroSection() {
         />
         <Image
           src="/images/hero-desktop.jpg"
-          alt="Kreastol Luxury Suite"
+          alt="No13teen"
           fill
           className="hidden object-cover lg:block"
           priority

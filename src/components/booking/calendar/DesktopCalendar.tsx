@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useRef, useEffect } from "react";
+import { useState, Fragment, useRef } from "react";
 import {
   format,
   subMonths,
@@ -36,9 +36,14 @@ function formatOrdinalDate(date: Date): string {
 
 interface DesktopCalendarProps {
   onDateSelect: (selection: DateSelection) => void;
+  /**
+   * Optional max height for the scrollable grid container (e.g. "60vh" or 400).
+   * When provided, the calendar body becomes vertically scrollable while headers stay sticky.
+   */
+  maxHeight?: string | number;
 }
 
-export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
+export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProps) {
   const [base, setBase] = useState(() => new Date());
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
@@ -54,18 +59,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const toast = useToast();
   const bookedDates = useBookingStore((s) => s.bookedDates);
   const bookings = useBookingStore((s) => s.bookings);
-  const fetchBookings = useBookingStore((s) => s.fetchBookings);
   const isRoomBlocked = useBookingStore((s) => s.isRoomBlocked);
   const unblockRoom = useBookingStore((s) => s.unblockRoom);
   const user = useAuthStore((s) => s.user);
   const isStaff = user && (user.role === "owner" || user.role === "receptionist");
-
-  // Ensure bookings are loaded
-  useEffect(() => {
-    if (bookings.length === 0) {
-      fetchBookings();
-    }
-  }, [bookings.length, fetchBookings]);
 
   const start = startOfMonth(base);
   const end = endOfMonth(base);
@@ -110,7 +107,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
     // If staff clicks on a blocked cell, allow unblocking
     if (isRoomBlocked(roomNumber, date) && isStaff) {
       if (confirm(`Unblock Room ${roomNumber} on ${format(new Date(date), "MMM dd, yyyy")}?`)) {
-        unblockRoom(roomNumber, [date]).then(() => fetchBookings());
+        unblockRoom(roomNumber, [date]).then(() => useBookingStore.getState().fetchBookings());
       }
       return;
     }
@@ -398,7 +395,8 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
       {/* Grid */}
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto"
+        className="overflow-x-auto overflow-y-auto"
+        style={maxHeight ? { maxHeight } : undefined}
         onMouseLeave={handleGridMouseLeave}
       >
         <div
@@ -748,7 +746,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                           paymentStatus: newStatus,
                           paymentDate: newStatus === "paid" ? new Date().toISOString() : null,
                         });
-                        await fetchBookings();
+                        await useBookingStore.getState().fetchBookings();
                         // Update local state
                         setSelectedBooking({ ...selectedBooking, paymentStatus: newStatus });
                         toast.success(`Payment status updated to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`);

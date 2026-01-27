@@ -1,7 +1,7 @@
 import type { User } from "@/types";
 
 export const HOTEL_INFO = {
-  name: "Kreastol Luxury Suite",
+  name: "No13teen",
   tagline: "Guests will enjoy a serene environment during their stay.",
   contact: {
     phone: "+234 XXX XXX XXXX",
@@ -50,7 +50,7 @@ export const PAYMENT_CONFIG = {
   autoConfirmDelay: 20000,
   mockBankDetails: {
     bankName: "Rubies MFB",
-    accountName: "Kreastol Luxury Suite Limited",
+    accountName: "No13teen Limited",
     accountNumber: "1234567890",
   },
 } as const;
@@ -61,22 +61,21 @@ export const STORAGE_KEYS = {
   currentUser: "kreastol_current_user",
 } as const;
 
-export const DEFAULT_USERS: User[] = [
-  {
-    id: 1,
-    name: "Admin Owner",
-    email: "owner@kreastol.com",
-    password: "owner123",
-    role: "owner",
-  },
-  {
-    id: 2,
-    name: "Front Desk",
-    email: "desk@kreastol.com",
-    password: "desk123",
-    role: "receptionist",
-  },
-];
+export const DEFAULT_USERS: Pick<User, "name" | "email" | "password" | "role">[] =
+  [
+    {
+      name: "Admin Owner",
+      email: "owner@kreastol.com",
+      password: "owner123",
+      role: "owner",
+    },
+    {
+      name: "Front Desk",
+      email: "desk@kreastol.com",
+      password: "desk123",
+      role: "receptionist",
+    },
+  ];
 
 export const MOBILE_CONFIG = {
   minTapTarget: 44,

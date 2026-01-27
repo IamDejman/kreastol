@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
 import type { User, UserStatus } from "@/types";
 
-// Database types
 interface DbUser {
   id: string;
   name: string;
@@ -15,7 +14,9 @@ interface DbUser {
 }
 
 function dbUserToUser(dbUser: DbUser): User {
-  const numericId = parseInt(dbUser.id.replace(/-/g, "").substring(0, 8), 16) % 1000000;
+  const numericId =
+    parseInt(dbUser.id.replace(/-/g, "").substring(0, 8), 16) % 1000000;
+
   return {
     id: numericId,
     dbId: dbUser.id,
@@ -27,38 +28,58 @@ function dbUserToUser(dbUser: DbUser): User {
   };
 }
 
-// GET /api/users/[email] - Get user by email
-export async function GET(
+// PATCH /api/users/[id] - Update user (name, password, status)
+export async function PATCH(
   request: NextRequest,
-  { params }: { params: { email: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const email = decodeURIComponent(params.email);
+    const body: Partial<Pick<User, "name" | "password" | "status">> =
+      await request.json();
+
+    const updateData: Partial<DbUser> = {};
+
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.password !== undefined) updateData.password = body.password;
+    if (body.status !== undefined) updateData.status = body.status;
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: "No fields to update" },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("users")
+      .update(updateData)
+      .eq("id", params.id)
       .select("*")
-      .eq("email", email)
       .maybeSingle();
 
     if (error) {
-      console.error("Error fetching user:", error);
+      console.error("Error updating user:", error);
       return NextResponse.json(
-        { error: `Failed to fetch user: ${error.message}` },
+        { error: `Failed to update user: ${error.message}` },
         { status: 500 }
       );
     }
 
     if (!data) {
-      return NextResponse.json({ user: null }, { status: 200 });
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
     }
 
     const user = dbUserToUser(data as DbUser);
     return NextResponse.json({ user });
   } catch (error: any) {
-    console.error("Error in GET /api/users/[email]:", error);
+    console.error("Error in PATCH /api/users/[id]:", error);
     return NextResponse.json(
       { error: error?.message || "Internal server error" },
       { status: 500 }
     );
   }
 }
+

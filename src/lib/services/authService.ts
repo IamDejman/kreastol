@@ -4,8 +4,8 @@ import { storageService } from "./storageService";
 const AUTH_COOKIE = "kreastol_current_user";
 const SESSION_START_KEY = "kreastol_session_start";
 const LAST_ACTIVITY_KEY = "kreastol_last_activity";
-const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
-const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 60 minutes in milliseconds
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes in milliseconds
 
 interface SessionData {
   user: User;
@@ -78,12 +78,12 @@ export function checkSessionTimeout(): { expired: boolean; reason: string | null
     return { expired: true, reason: "Session not found" };
   }
 
-  // Check session timeout (30 minutes from login)
+// Check session timeout (60 minutes from login)
   if (now - sessionStart > SESSION_TIMEOUT) {
     return { expired: true, reason: "session_timeout" };
   }
 
-  // Check inactivity timeout (15 minutes of no activity)
+  // Check inactivity timeout (60 minutes of no activity)
   if (now - lastActivity > INACTIVITY_TIMEOUT) {
     return { expired: true, reason: "inactivity_timeout" };
   }

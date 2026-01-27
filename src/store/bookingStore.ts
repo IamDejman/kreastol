@@ -9,6 +9,7 @@ interface BookingStore {
   blockedRooms: Record<number, string[]>; // roomNumber -> array of blocked dates
   selectedDates: DateSelection | null;
   isLoading: boolean;
+  hasLoadedBookings: boolean;
   fetchBookings: () => Promise<void>;
   createBooking: (
     selection: DateSelection,
@@ -30,6 +31,7 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
   blockedRooms: {},
   selectedDates: null,
   isLoading: false,
+  hasLoadedBookings: false,
 
   fetchBookings: async () => {
     set({ isLoading: true });
@@ -39,9 +41,11 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
       // Also fetch blocked rooms from database
       const { supabaseService } = await import("@/lib/services/supabaseService");
       const blockedRooms = await supabaseService.getBlockedRooms();
-      set({ bookings, bookedDates, blockedRooms, isLoading: false });
+      set({ bookings, bookedDates, blockedRooms, hasLoadedBookings: true });
     } catch (error) {
       console.error("Error fetching bookings:", error);
+      set({ hasLoadedBookings: true });
+    } finally {
       set({ isLoading: false });
     }
   },

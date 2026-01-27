@@ -1,6 +1,6 @@
-# Kreastol Luxury Suite – Mobile-First Booking System
+# No13teen – Mobile-First Booking System
 
-A modern, mobile-first hotel booking management system built with Next.js, TypeScript, and Tailwind CSS for **Kreastol Luxury Suite**, a 4-room luxury hotel in Nigeria.
+A modern, mobile-first hotel booking management system built with Next.js, TypeScript, and Tailwind CSS for **No13teen**, a 4-room luxury hotel in Nigeria.
 
 ## Features
 
@@ -81,4 +81,4 @@ src/
 
 ## License
 
-Proprietary – Kreastol Luxury Suite
+Proprietary – No13teen

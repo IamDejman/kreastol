@@ -6,8 +6,8 @@ import { useAuthStore } from "@/store/authStore";
 import { authService } from "@/lib/services/authService";
 
 const CHECK_INTERVAL = 60 * 1000; // Check every minute
-const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+const SESSION_TIMEOUT = 60 * 60 * 1000; // 60 minutes
+const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes
 
 export function useSessionTimeout() {
   const router = useRouter();

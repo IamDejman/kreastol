@@ -26,13 +26,13 @@ function LoginPageContent() {
     if (timeoutMessage === "session_timeout") {
       return {
         title: "Session Expired",
-        message: "Your session has expired after 30 minutes. Please log in again.",
+        message: "Your session has expired after 60 minutes. Please log in again.",
       };
     }
     if (timeoutMessage === "inactivity_timeout") {
       return {
         title: "Session Timeout",
-        message: "You have been logged out due to 15 minutes of inactivity. Please log in again.",
+        message: "You have been logged out due to 60 minutes of inactivity. Please log in again.",
       };
     }
     if (timeoutMessage === "session_expired") {

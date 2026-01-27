@@ -25,12 +25,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Kreastol Luxury Suite - Book Your Stay",
+  title: "No13teen - Book Your Stay",
   description: "Guests will enjoy a serene environment during their stay",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Kreastol",
+    title: "No13teen",
   },
 };
 

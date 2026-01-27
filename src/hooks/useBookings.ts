@@ -5,12 +5,16 @@ import { useBookingStore } from "@/store/bookingStore";
 
 export function useBookings() {
   const fetchBookings = useBookingStore((s) => s.fetchBookings);
+  const isLoading = useBookingStore((s) => s.isLoading);
+  const hasLoadedBookings = useBookingStore((s) => s.hasLoadedBookings);
   const bookings = useBookingStore((s) => s.bookings);
   const bookedDates = useBookingStore((s) => s.bookedDates);
 
   useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
+    if (!hasLoadedBookings && !isLoading) {
+      fetchBookings();
+    }
+  }, [fetchBookings, hasLoadedBookings, isLoading]);
 
-  return { bookings, bookedDates, refresh: fetchBookings };
+  return { bookings, bookedDates, isLoading, hasLoadedBookings, refresh: fetchBookings };
 }

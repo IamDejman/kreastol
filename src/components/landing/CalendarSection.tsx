@@ -2,12 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/hooks/useMediaQuery";
+import { useBookings } from "@/hooks/useBookings";
 import { MobileCalendar } from "@/components/booking/calendar/MobileCalendar";
 import { DesktopCalendar } from "@/components/booking/calendar/DesktopCalendar";
+import { Spinner } from "@/components/ui/Spinner";
 
 export function CalendarSection() {
   const isMobile = useIsMobile();
   const router = useRouter();
+  const { isLoading, hasLoadedBookings } = useBookings();
 
   const handleDateSelect = (selection: {
     roomNumber: number;
@@ -22,6 +25,17 @@ export function CalendarSection() {
     router.push(`/book?${params.toString()}`);
   };
 
+  const calendarContent = !hasLoadedBookings || isLoading ? (
+    <div className="flex items-center gap-3 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-600">
+      <Spinner size="sm" />
+      <span>Loading availability…</span>
+    </div>
+  ) : isMobile ? (
+    <MobileCalendar onDateSelect={handleDateSelect} maxHeight="70vh" />
+  ) : (
+    <DesktopCalendar onDateSelect={handleDateSelect} maxHeight="60vh" />
+  );
+
   return (
     <section id="book" className="bg-white px-4 pt-16 pb-12 md:pt-20 md:pb-16">
       <div className="mx-auto max-w-5xl">
@@ -31,13 +45,7 @@ export function CalendarSection() {
         <p className="mt-2 text-gray-600">
           Select your dates and room to book.
         </p>
-        <div className="mt-8">
-          {isMobile ? (
-            <MobileCalendar onDateSelect={handleDateSelect} />
-          ) : (
-            <DesktopCalendar onDateSelect={handleDateSelect} />
-          )}
-        </div>
+        <div className="mt-8">{calendarContent}</div>
       </div>
     </section>
   );
