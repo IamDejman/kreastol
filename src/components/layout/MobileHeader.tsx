@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, LogOut } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { Drawer } from "@/components/ui/Drawer";
@@ -46,16 +46,28 @@ export function MobileHeader() {
             {HOTEL_INFO.name}
           </span>
         </Link>
-        {isDashboardPage && (
-          <button
-            type="button"
-            onClick={toggleMobileMenu}
-            className="flex min-h-touch min-w-touch items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-gray-100"
-            aria-label="Open menu"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {user && !isDashboardPage && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex min-h-touch min-w-touch items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+              aria-label="Log out"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          )}
+          {isDashboardPage && (
+            <button
+              type="button"
+              onClick={toggleMobileMenu}
+              className="flex min-h-touch min-w-touch items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+              aria-label="Open menu"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+          )}
+        </div>
       </header>
 
       {isDashboardPage && (
