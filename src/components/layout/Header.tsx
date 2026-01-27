@@ -27,17 +27,6 @@ export function Header() {
           </span>
         </Link>
         <nav className="flex items-center gap-6">
-          <Link
-            href="/my-bookings"
-            className={cn(
-              "text-sm font-medium transition-colors",
-              pathname === "/my-bookings"
-                ? "text-primary"
-                : "text-gray-600 hover:text-primary"
-            )}
-          >
-            My Bookings
-          </Link>
           {user && (
             <button
               type="button"
