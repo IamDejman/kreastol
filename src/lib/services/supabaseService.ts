@@ -1,137 +1,21 @@
-import { supabase } from "@/lib/supabase/client";
 import type { Booking, User } from "@/types";
 
-// Database types (matching Supabase schema)
-interface DbUser {
-  id: string; // UUID in DB, but we'll convert to number for compatibility
-  name: string;
-  email: string;
-  password: string;
-  role: "owner" | "receptionist";
-  created_at: string;
-  updated_at: string;
-}
-
-interface DbBooking {
-  id: string;
-  booking_code: string;
-  room_number: number;
-  room_rate: number;
-  check_in: string;
-  check_out: string;
-  nights: number;
-  total_amount: number;
-  guest_name: string;
-  guest_phone: string;
-  guest_email: string;
-  special_requests: string | null;
-  account_number: string;
-  bank_name: string;
-  account_name: string;
-  payment_status: string;
-  payment_reference: string | null;
-  payment_date: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-// Convert DB user to app User type
-function dbUserToUser(dbUser: DbUser): User {
-  // Convert UUID to numeric ID (using hash of UUID for consistency)
-  // For simplicity, we'll use a hash function or just use the first part
-  // In a real app, you might want to add a numeric_id column
-  const numericId = parseInt(dbUser.id.replace(/-/g, "").substring(0, 8), 16) % 1000000;
-  return {
-    id: numericId,
-    name: dbUser.name,
-    email: dbUser.email,
-    password: dbUser.password,
-    role: dbUser.role,
-  };
-}
-
-// Convert app User to DB user type
-function userToDbUser(user: User): Omit<DbUser, "id" | "created_at" | "updated_at"> {
-  return {
-    name: user.name,
-    email: user.email,
-    password: user.password,
-    role: user.role,
-  };
-}
-
-// Convert DB booking to app Booking type
-function dbBookingToBooking(dbBooking: DbBooking): Booking {
-  return {
-    bookingCode: dbBooking.booking_code,
-    roomNumber: dbBooking.room_number as 1 | 2 | 3 | 4,
-    roomRate: Number(dbBooking.room_rate),
-    checkIn: dbBooking.check_in,
-    checkOut: dbBooking.check_out,
-    nights: dbBooking.nights,
-    totalAmount: Number(dbBooking.total_amount),
-    guestName: dbBooking.guest_name,
-    guestPhone: dbBooking.guest_phone,
-    guestEmail: dbBooking.guest_email,
-    specialRequests: dbBooking.special_requests || undefined,
-    accountNumber: dbBooking.account_number,
-    bankName: dbBooking.bank_name,
-    accountName: dbBooking.account_name,
-    paymentStatus: dbBooking.payment_status as "paid" | "credit" | "unpaid",
-    paymentReference: dbBooking.payment_reference,
-    paymentDate: dbBooking.payment_date,
-    createdAt: dbBooking.created_at,
-    updatedAt: dbBooking.updated_at,
-  };
-}
-
-// Convert app Booking to DB booking type
-function bookingToDbBooking(booking: Booking): Omit<DbBooking, "id" | "created_at" | "updated_at"> {
-  return {
-    booking_code: booking.bookingCode,
-    room_number: booking.roomNumber,
-    room_rate: booking.roomRate,
-    check_in: booking.checkIn,
-    check_out: booking.checkOut,
-    nights: booking.nights,
-    total_amount: booking.totalAmount,
-    guest_name: booking.guestName,
-    guest_phone: booking.guestPhone,
-    guest_email: booking.guestEmail,
-    special_requests: booking.specialRequests || null,
-    account_number: booking.accountNumber,
-    bank_name: booking.bankName,
-    account_name: booking.accountName,
-    payment_status: booking.paymentStatus,
-    payment_reference: booking.paymentReference,
-    payment_date: booking.paymentDate,
-  };
-}
-
+// API-based service - calls Next.js API routes instead of direct Supabase
 export const supabaseService = {
   // Bookings
   async getBookings(): Promise<Booking[]> {
     try {
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching bookings:", error);
-        // If it's a network error or table doesn't exist, return empty array
-        if (error.message?.includes("Failed to fetch") || error.message?.includes("relation") || error.code === "42P01") {
-          console.warn("Bookings table may not exist yet or network error. Returning empty array.");
-          return [];
-        }
-        throw new Error(`Failed to fetch bookings: ${error.message}`);
+      const response = await fetch("/api/bookings");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to fetch bookings");
       }
-
-      return (data || []).map(dbBookingToBooking);
+      const data = await response.json();
+      return data.bookings || [];
     } catch (error: any) {
-      // Handle network errors gracefully
+      console.error("Error fetching bookings:", error);
       if (error?.message?.includes("Failed to fetch") || error?.message?.includes("ERR_NAME_NOT_RESOLVED")) {
-        console.warn("Network error fetching bookings. Check your Supabase connection and ensure the project is active.");
+        console.warn("Network error fetching bookings. Check your API connection.");
         return [];
       }
       throw error;
@@ -139,155 +23,126 @@ export const supabaseService = {
   },
 
   async saveBooking(booking: Booking): Promise<void> {
-    const dbBooking = bookingToDbBooking(booking);
-    const { error } = await supabase.from("bookings").insert(dbBooking);
+    const response = await fetch("/api/bookings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(booking),
+    });
 
-    if (error) {
-      console.error("Error saving booking:", error);
-      throw new Error(`Failed to save booking: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to save booking");
     }
   },
 
   async updateBooking(bookingCode: string, updates: Partial<Booking>): Promise<void> {
-    const updateData: Partial<DbBooking> = {};
+    const response = await fetch(`/api/bookings/${encodeURIComponent(bookingCode)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updates),
+    });
 
-    if (updates.roomNumber !== undefined) updateData.room_number = updates.roomNumber;
-    if (updates.roomRate !== undefined) updateData.room_rate = updates.roomRate;
-    if (updates.checkIn !== undefined) updateData.check_in = updates.checkIn;
-    if (updates.checkOut !== undefined) updateData.check_out = updates.checkOut;
-    if (updates.nights !== undefined) updateData.nights = updates.nights;
-    if (updates.totalAmount !== undefined) updateData.total_amount = updates.totalAmount;
-    if (updates.guestName !== undefined) updateData.guest_name = updates.guestName;
-    if (updates.guestPhone !== undefined) updateData.guest_phone = updates.guestPhone;
-    if (updates.guestEmail !== undefined) updateData.guest_email = updates.guestEmail;
-    if (updates.specialRequests !== undefined)
-      updateData.special_requests = updates.specialRequests || null;
-    if (updates.accountNumber !== undefined) updateData.account_number = updates.accountNumber;
-    if (updates.bankName !== undefined) updateData.bank_name = updates.bankName;
-    if (updates.accountName !== undefined) updateData.account_name = updates.accountName;
-    if (updates.paymentStatus !== undefined) updateData.payment_status = updates.paymentStatus;
-    if (updates.paymentReference !== undefined)
-      updateData.payment_reference = updates.paymentReference;
-    if (updates.paymentDate !== undefined) updateData.payment_date = updates.paymentDate;
-
-    const { error } = await supabase
-      .from("bookings")
-      .update(updateData)
-      .eq("booking_code", bookingCode);
-
-    if (error) {
-      console.error("Error updating booking:", error);
-      throw new Error(`Failed to update booking: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to update booking");
     }
   },
 
   async getBookingByCode(bookingCode: string): Promise<Booking | null> {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("booking_code", bookingCode)
-      .maybeSingle();
+    const response = await fetch(`/api/bookings/${encodeURIComponent(bookingCode)}`);
 
-    if (error) {
-      console.error("Error fetching booking:", error);
-      throw new Error(`Failed to fetch booking: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to fetch booking");
     }
 
-    return data ? dbBookingToBooking(data as DbBooking) : null;
+    const data = await response.json();
+    return data.booking || null;
   },
 
   // Users
   async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from("users").select("*");
+    const response = await fetch("/api/users");
 
-    if (error) {
-      console.error("Error fetching users:", error);
-      throw new Error(`Failed to fetch users: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to fetch users");
     }
 
-    return (data || []).map(dbUserToUser);
+    const data = await response.json();
+    return data.users || [];
   },
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .maybeSingle();
+    const response = await fetch(`/api/users/${encodeURIComponent(email)}`);
 
-    if (error) {
-      console.error("Error fetching user:", error);
-      throw new Error(`Failed to fetch user: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to fetch user");
     }
 
-    return data ? dbUserToUser(data as DbUser) : null;
+    const data = await response.json();
+    return data.user || null;
   },
 
   async createUser(user: Omit<User, "id">): Promise<User> {
-    const dbUser = userToDbUser({ ...user, id: 0 }); // id will be generated by DB
-    const { data, error } = await supabase.from("users").insert(dbUser).select().single();
+    const response = await fetch("/api/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(user),
+    });
 
-    if (error) {
-      console.error("Error creating user:", error);
-      throw new Error(`Failed to create user: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to create user");
     }
 
-    return dbUserToUser(data as DbUser);
+    const data = await response.json();
+    return data.user;
   },
 
   async userExists(email: string): Promise<boolean> {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
+    try {
+      const response = await fetch(`/api/users/check?email=${encodeURIComponent(email)}`);
 
-    if (error) {
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json();
+      return data.exists || false;
+    } catch (error) {
       console.error("Error checking user existence:", error);
       return false;
     }
-
-    return !!data;
   },
 
   // Blocked Rooms
   async getBlockedRooms(): Promise<Record<number, string[]>> {
     try {
-      const { data, error } = await supabase
-        .from("blocked_rooms")
-        .select("room_number, blocked_date")
-        .gte("blocked_date", new Date().toISOString().split("T")[0]); // Only future/present dates
-
-      if (error) {
-        console.error("Error fetching blocked rooms:", error);
-        if (error.message?.includes("relation") || error.code === "42P01") {
+      const response = await fetch("/api/blocked-rooms");
+      
+      if (!response.ok) {
+        const error = await response.json();
+        if (error.error?.includes("relation") || error.error?.includes("42P01")) {
           console.warn("Blocked rooms table may not exist yet. Returning empty object.");
           return {};
         }
-        throw new Error(`Failed to fetch blocked rooms: ${error.message}`);
+        throw new Error(error.error || "Failed to fetch blocked rooms");
       }
 
-      const result: Record<number, string[]> = {};
-      (data || []).forEach((row: { room_number: number; blocked_date: string }) => {
-        const roomNum = row.room_number;
-        const dateStr = row.blocked_date.split("T")[0]; // Extract date part
-        if (!result[roomNum]) {
-          result[roomNum] = [];
-        }
-        if (!result[roomNum].includes(dateStr)) {
-          result[roomNum].push(dateStr);
-        }
-      });
-
-      // Sort dates for each room
-      Object.keys(result).forEach((roomNum) => {
-        result[Number(roomNum)].sort();
-      });
-
-      return result;
+      const data = await response.json();
+      return data.blockedRooms || {};
     } catch (error: any) {
+      console.error("Error fetching blocked rooms:", error);
       if (error?.message?.includes("Failed to fetch") || error?.message?.includes("ERR_NAME_NOT_RESOLVED")) {
-        console.warn("Network error fetching blocked rooms. Check your Supabase connection.");
+        console.warn("Network error fetching blocked rooms. Check your API connection.");
         return {};
       }
       throw error;
@@ -295,32 +150,32 @@ export const supabaseService = {
   },
 
   async blockRoom(roomNumber: number, dates: string[], reason?: string): Promise<void> {
-    const records = dates.map((date) => ({
-      room_number: roomNumber,
-      blocked_date: date,
-      reason: reason || null,
-    }));
-
-    const { error } = await supabase.from("blocked_rooms").upsert(records, {
-      onConflict: "room_number,blocked_date",
+    const response = await fetch("/api/blocked-rooms", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roomNumber, dates, reason }),
     });
 
-    if (error) {
-      console.error("Error blocking room:", error);
-      throw new Error(`Failed to block room: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to block room");
     }
   },
 
   async unblockRoom(roomNumber: number, dates: string[]): Promise<void> {
-    const { error } = await supabase
-      .from("blocked_rooms")
-      .delete()
-      .eq("room_number", roomNumber)
-      .in("blocked_date", dates);
+    const response = await fetch("/api/blocked-rooms", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roomNumber, dates }),
+    });
 
-    if (error) {
-      console.error("Error unblocking room:", error);
-      throw new Error(`Failed to unblock room: ${error.message}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to unblock room");
     }
   },
 };
