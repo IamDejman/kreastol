@@ -54,13 +54,7 @@ export function ReceptionistBookingsTable({ bookings }: ReceptionistBookingsTabl
               <td className="px-4 py-3">{formatCurrency(b.totalAmount)}</td>
               <td className="px-4 py-3">
                 <Badge
-                  variant={
-                    b.paymentStatus === "paid"
-                      ? "confirmed"
-                      : b.paymentStatus === "credit"
-                        ? "pending"
-                        : "cancelled"
-                  }
+                  variant={b.paymentStatus === "paid" ? "confirmed" : "cancelled"}
                 >
                   {b.paymentStatus.charAt(0).toUpperCase() + b.paymentStatus.slice(1)}
                 </Badge>
