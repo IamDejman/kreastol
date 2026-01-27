@@ -29,11 +29,11 @@ export function BookingCard({ booking }: BookingCardProps) {
         </div>
         <Badge
           variant={
-            booking.paymentStatus === "confirmed"
+            booking.paymentStatus === "paid"
               ? "confirmed"
-              : booking.paymentStatus === "cancelled"
-                ? "cancelled"
-                : "pending"
+              : booking.paymentStatus === "credit"
+                ? "pending"
+                : "cancelled"
           }
         >
           {booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}

@@ -55,11 +55,11 @@ export function ReceptionistBookingsTable({ bookings }: ReceptionistBookingsTabl
               <td className="px-4 py-3">
                 <Badge
                   variant={
-                    b.paymentStatus === "confirmed"
+                    b.paymentStatus === "paid"
                       ? "confirmed"
-                      : b.paymentStatus === "cancelled"
-                        ? "cancelled"
-                        : "pending"
+                      : b.paymentStatus === "credit"
+                        ? "pending"
+                        : "cancelled"
                   }
                 >
                   {b.paymentStatus.charAt(0).toUpperCase() + b.paymentStatus.slice(1)}
