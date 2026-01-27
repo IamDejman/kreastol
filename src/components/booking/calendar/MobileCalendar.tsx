@@ -292,7 +292,7 @@ export function MobileCalendar({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
       {/* Header with month nav */}
       <div 
         className="flex items-center justify-between border-b border-gray-200 py-3 relative"
@@ -381,7 +381,7 @@ export function MobileCalendar({
       {/* Grid - transposed structure */}
       <div 
         ref={scrollContainerRef} 
-        className="overflow-x-auto overflow-y-auto"
+        className="overflow-x-auto"
         onMouseLeave={handleGridMouseLeave}
       >
         <div
@@ -599,7 +599,9 @@ export function MobileCalendar({
               type="button"
               onClick={() => {
                 setShowPastDates(true);
-                setVisibleDaysCount(allDays.length);
+                setVisibleDaysCount((prev) =>
+                  Math.min(prev + 6, allDays.length)
+                );
               }}
               className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
             >
@@ -609,7 +611,11 @@ export function MobileCalendar({
           {hasMoreDays && (
             <button
               type="button"
-              onClick={() => setVisibleDaysCount(allAvailableDays.length)}
+              onClick={() =>
+                setVisibleDaysCount((prev) =>
+                  Math.min(prev + 6, allAvailableDays.length)
+                )
+              }
               className="text-xs font-medium text-primary hover:text-primary/80 transition-colors min-h-touch min-w-touch"
             >
               See more dates ({visibleDaysCount}/{allAvailableDays.length})

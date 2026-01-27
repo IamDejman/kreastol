@@ -321,7 +321,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
       {/* Header with month nav */}
       <div 
         className="flex items-center justify-between border-b border-gray-200 py-4 relative"
@@ -398,7 +398,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
       {/* Grid */}
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto overflow-y-auto"
+        className="overflow-x-auto"
         onMouseLeave={handleGridMouseLeave}
       >
         <div
@@ -624,7 +624,9 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                   type="button"
                   onClick={() => {
                     setShowPastDates(true);
-                    setVisibleDaysCount(allDays.length);
+                    setVisibleDaysCount((prev) =>
+                      Math.min(prev + 6, allDays.length)
+                    );
                   }}
                   className="text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
                 >
@@ -634,7 +636,11 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
               {hasMoreDays && (
                 <button
                   type="button"
-                  onClick={() => setVisibleDaysCount(allAvailableDays.length)}
+                  onClick={() =>
+                    setVisibleDaysCount((prev) =>
+                      Math.min(prev + 6, allAvailableDays.length)
+                    )
+                  }
                   className="text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
                 >
                   See more dates ({visibleDaysCount}/{allAvailableDays.length})
