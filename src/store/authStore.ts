@@ -7,7 +7,7 @@ interface AuthStore {
   isLoading: boolean;
   error: string | null;
   login: (credentials: LoginCredentials) => Promise<void>;
-  logout: () => void;
+  logout: (reason?: string) => void;
   checkAuth: () => void;
   clearError: () => void;
 }
@@ -29,8 +29,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     }
   },
 
-  logout: () => {
-    authService.logout();
+  logout: (reason?: string) => {
+    authService.logout(reason);
     set({ user: null });
   },
 

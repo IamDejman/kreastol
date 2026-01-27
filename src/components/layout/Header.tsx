@@ -14,7 +14,7 @@ export function Header() {
   const logout = useAuthStore((s) => s.logout);
 
   const handleLogout = () => {
-    logout();
+    logout("user_logout");
     router.push("/login");
   };
 

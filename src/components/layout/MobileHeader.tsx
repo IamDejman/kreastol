@@ -33,7 +33,7 @@ export function MobileHeader() {
   const links = user?.role === "owner" ? ownerLinks : receptionistLinks;
 
   const handleLogout = () => {
-    logout();
+    logout("user_logout");
     toggleMobileMenu();
     router.push("/login");
   };

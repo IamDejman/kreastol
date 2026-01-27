@@ -32,7 +32,7 @@ export function Sidebar({ role }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useLocalStorage("sidebar-collapsed", false);
 
   const handleLogout = () => {
-    logout();
+    logout("user_logout");
     router.push("/login");
   };
 
