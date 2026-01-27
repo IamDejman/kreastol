@@ -195,15 +195,15 @@ export function MobileCalendar({
   const getStatus = (
     roomNumber: number,
     date: string
-  ): "available" | "booked" | "selecting" | "selected" | "blocked" => {
+  ): "available" | "booked" | "selecting" | "selected" | "blocked" | "past" => {
     // Check if room is blocked first
     if (isRoomBlocked(roomNumber, date)) return "blocked";
     
     const roomDates = bookedDates[roomNumber] ?? [];
     // Only show as booked if there is an actual booking
     if (roomDates.includes(date)) return "booked";
-    // Past dates without bookings should not look booked
-    if (date < today) return "available";
+    // Past dates without bookings should be non-selectable and neutral
+    if (date < today) return "past";
     if (selectingRoom !== roomNumber) return "available";
 
     if (date === checkIn) return "selected";
@@ -491,7 +491,7 @@ export function MobileCalendar({
                       onMouseEnter={() => handleCellMouseEnter(room.number, dateStr)}
                       onTouchStart={(e) => handleCellTouchStart(e, room.number, dateStr)}
                       onTouchEnd={handleCellTouchEnd}
-                      disabled={status === "blocked" && !isStaff}
+                      disabled={(status === "blocked" && !isStaff) || status === "past"}
                       className={cn(
                         "relative flex h-14 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors min-h-touch",
                         isLastRow && "border-b-0",
@@ -502,6 +502,8 @@ export function MobileCalendar({
                           "cursor-pointer bg-red-100 hover:bg-red-200 active:bg-red-300",
                         status === "available" &&
                           "bg-green-100 text-green-700 active:bg-green-200",
+                        status === "past" &&
+                          "bg-white text-gray-300 cursor-default",
                         (status === "selecting" ||
                           status === "selected" ||
                           isInRange) &&
