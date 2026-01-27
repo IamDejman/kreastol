@@ -1,6 +1,6 @@
 "use client";
 
-import { RoomBlockingManager } from "@/components/dashboard/owner/RoomBlockingManager";
+import { RoomBlockingManager } from "@/components/landing/RoomBlockingManager";
 
 export default function OwnerRoomsPage() {
   return (
