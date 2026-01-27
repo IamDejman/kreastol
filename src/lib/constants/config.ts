@@ -31,10 +31,10 @@ export const HOTEL_INFO = {
 
 export const ROOM_CONFIG = {
   rooms: [
-    { number: 1, rate: 30000, name: "Room 1", description: "Deluxe Suite" },
-    { number: 2, rate: 25000, name: "Room 2", description: "Standard Suite" },
-    { number: 3, rate: 25000, name: "Room 3", description: "Standard Suite" },
-    { number: 4, rate: 25000, name: "Room 4", description: "Standard Suite" },
+    { number: 1, rate: 30000, name: "Room 1" },
+    { number: 2, rate: 25000, name: "Room 2" },
+    { number: 3, rate: 25000, name: "Room 3" },
+    { number: 4, rate: 25000, name: "Room 4" },
   ],
   totalRooms: 4,
 } as const;

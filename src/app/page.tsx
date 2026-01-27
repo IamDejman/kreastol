@@ -1,6 +1,5 @@
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { Header } from "@/components/layout/Header";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { CalendarSection } from "@/components/landing/CalendarSection";
 import { AmenitiesSection } from "@/components/landing/AmenitiesSection";
 import { PoliciesSection } from "@/components/landing/PoliciesSection";
@@ -16,15 +15,13 @@ export default function LandingPage() {
         <Header />
       </div>
 
-      <main className="pb-16 md:pb-0">
+      <main>
         <CalendarSection />
         <AmenitiesSection />
         <PoliciesSection />
       </main>
 
       <Footer />
-
-      <BottomNav />
     </>
   );
 }

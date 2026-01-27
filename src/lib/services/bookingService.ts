@@ -16,6 +16,8 @@ export async function getBookedDates(): Promise<Record<number, string[]>> {
   }
 
   for (const b of bookings) {
+    // For booked dates, we need to include all nights from check-in to check-out (exclusive of checkout)
+    // getDatesInRange already does this correctly (excludes checkout date)
     const dates = getDatesInRange(b.checkIn, b.checkOut);
     for (const d of dates) {
       if (!result[b.roomNumber].includes(d)) {
@@ -35,9 +37,25 @@ async function isRoomAvailable(
   checkIn: string,
   checkOut: string
 ): Promise<boolean> {
+  // Fetch fresh booked dates from database to avoid stale data
   const booked = await getBookedDates();
+  
+  // Get all dates that would be occupied by this booking
+  // This includes all nights from check-in to check-out (exclusive of checkout)
+  // For example: checkIn=26th, checkOut=28th → blocks 26th and 27th (2 nights)
   const range = getDatesInRange(checkIn, checkOut);
-  return !range.some((d) => booked[roomNumber]?.includes(d));
+  
+  // Also check blocked rooms
+  const { supabaseService } = await import("./supabaseService");
+  const blockedRooms = await supabaseService.getBlockedRooms();
+  const blockedDates = blockedRooms[roomNumber] || [];
+  
+  // Check if any date in the range is already booked OR blocked
+  const hasConflict = range.some((d) => 
+    booked[roomNumber]?.includes(d) || blockedDates.includes(d)
+  );
+  
+  return !hasConflict;
 }
 
 export async function createBooking(
@@ -45,9 +63,17 @@ export async function createBooking(
   formData: BookingFormData
 ): Promise<Booking> {
   const { roomNumber, checkIn, checkOut } = selection;
+  
+  // Always check availability with fresh data from database
   const available = await isRoomAvailable(roomNumber, checkIn, checkOut);
   if (!available) {
-    throw new Error("Selected dates are no longer available.");
+    // Get booked dates to provide a better error message
+    const booked = await getBookedDates();
+    const range = getDatesInRange(checkIn, checkOut);
+    const conflictingDates = range.filter((d) => booked[roomNumber]?.includes(d));
+    throw new Error(
+      `Selected dates are no longer available. Conflicting dates: ${conflictingDates.join(", ")}`
+    );
   }
 
   const room = ROOM_CONFIG.rooms.find((r) => r.number === roomNumber);
@@ -73,7 +99,7 @@ export async function createBooking(
     accountNumber: bank.accountNumber,
     bankName: bank.bankName,
     accountName: bank.accountName,
-    paymentStatus: "confirmed",
+    paymentStatus: "unpaid",
     paymentReference: `MOCK-${Date.now()}`,
     paymentDate: now,
     createdAt: now,

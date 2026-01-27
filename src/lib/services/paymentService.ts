@@ -20,7 +20,7 @@ export async function verifyPayment(bookingCode: string): Promise<PaymentVerific
     return { status: "failed", message: "Booking not found." };
   }
 
-  if (booking.paymentStatus === "confirmed") {
+  if (booking.paymentStatus === "paid") {
     return {
       status: "successful",
       reference: booking.paymentReference ?? undefined,
@@ -29,8 +29,13 @@ export async function verifyPayment(bookingCode: string): Promise<PaymentVerific
     };
   }
 
-  if (booking.paymentStatus === "cancelled") {
-    return { status: "failed", message: "Booking was cancelled." };
+  if (booking.paymentStatus === "credit") {
+    return {
+      status: "successful",
+      reference: booking.paymentReference ?? undefined,
+      amount: booking.totalAmount,
+      paidAt: booking.paymentDate ?? undefined,
+    };
   }
 
   const elapsed = Date.now() - (await getCreatedAt(bookingCode));
@@ -39,7 +44,7 @@ export async function verifyPayment(bookingCode: string): Promise<PaymentVerific
 
   if (elapsed >= delay) {
     await storageService.updateBooking(bookingCode, {
-      paymentStatus: "confirmed",
+      paymentStatus: "paid",
       paymentReference: `MOCK-${Date.now()}`,
       paymentDate: new Date().toISOString(),
     });

@@ -5,6 +5,7 @@ import {
   format,
   subMonths,
   addMonths,
+  subDays,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
@@ -12,11 +13,17 @@ import {
   isBefore,
   isWithinInterval,
 } from "date-fns";
-import type { DateSelection } from "@/types";
+import type { DateSelection, Booking } from "@/types";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
 import { useBookingStore } from "@/store/bookingStore";
 import { ROOM_CONFIG } from "@/lib/constants/config";
 import { cn } from "@/lib/utils/cn";
+import { Modal } from "@/components/ui/Modal";
+import { formatCurrency } from "@/lib/utils/formatters";
+import { Badge } from "@/components/ui/Badge";
+import { useAuthStore } from "@/store/authStore";
+import { useToast } from "@/components/ui/Toast";
+import { getDatesInRange } from "@/lib/utils/dateUtils";
 
 const MIN_DAY_ROW_WIDTH = 80;
 const ROOM_COLUMN_WIDTH = 160;
@@ -39,12 +46,19 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ room: number; date: string } | null>(null);
   const [visibleDaysCount, setVisibleDaysCount] = useState(6);
+  const [showPastDates, setShowPastDates] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useCalendarSync();
+  const toast = useToast();
   const bookedDates = useBookingStore((s) => s.bookedDates);
   const bookings = useBookingStore((s) => s.bookings);
   const fetchBookings = useBookingStore((s) => s.fetchBookings);
+  const isRoomBlocked = useBookingStore((s) => s.isRoomBlocked);
+  const unblockRoom = useBookingStore((s) => s.unblockRoom);
+  const user = useAuthStore((s) => s.user);
+  const isStaff = user && (user.role === "owner" || user.role === "receptionist");
 
   // Ensure bookings are loaded
   useEffect(() => {
@@ -57,11 +71,15 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const end = endOfMonth(base);
   const today = format(new Date(), "yyyy-MM-dd");
   const allDays = eachDayOfInterval({ start, end });
-  const allAvailableDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+  // Filter days based on showPastDates: if false, only show future dates; if true, show all
+  const allAvailableDays = showPastDates 
+    ? allDays 
+    : allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
   const days = allAvailableDays.slice(0, visibleDaysCount);
   
   const hasMoreDays = visibleDaysCount < allAvailableDays.length;
   const canCollapse = visibleDaysCount > 6;
+  const hasPastDates = allDays.some((d) => format(d, "yyyy-MM-dd") < today);
 
 
   const isRangeAvailable = (roomNumber: number, from: string, to: string) => {
@@ -76,9 +94,40 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
     });
   };
 
+  // Find booking for a specific room and date
+  const findBookingForDate = (roomNumber: number, dateStr: string): Booking | null => {
+    const date = parseISO(dateStr);
+    return bookings.find((booking) => {
+      if (booking.roomNumber !== roomNumber) return false;
+      const checkIn = parseISO(booking.checkIn);
+      const checkOut = parseISO(booking.checkOut);
+      // Date is within booking range (inclusive of check-in, exclusive of check-out)
+      return date >= checkIn && date < checkOut;
+    }) || null;
+  };
+
   const handleCellClick = (roomNumber: number, date: string) => {
+    // If staff clicks on a blocked cell, allow unblocking
+    if (isRoomBlocked(roomNumber, date) && isStaff) {
+      if (confirm(`Unblock Room ${roomNumber} on ${format(new Date(date), "MMM dd, yyyy")}?`)) {
+        unblockRoom(roomNumber, [date]).then(() => fetchBookings());
+      }
+      return;
+    }
+    
+    // Don't allow interaction with blocked rooms for non-staff
+    if (isRoomBlocked(roomNumber, date)) return;
+    
     const roomDates = bookedDates[roomNumber] ?? [];
-    if (roomDates.includes(date) || date < today) return;
+    
+    // If cell is booked, show booking details
+    if (roomDates.includes(date) || date < today) {
+      const booking = findBookingForDate(roomNumber, date);
+      if (booking) {
+        setSelectedBooking(booking);
+      }
+      return;
+    }
 
     if (!selectingRoom) {
       setSelectingRoom(roomNumber);
@@ -115,6 +164,35 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
       setCheckOut(null);
       setHoveredDate(null);
     } else {
+      // Validate that the selected range doesn't conflict with existing bookings
+      // Bookings are tied to nights, so check-in 26th and check-out 28th means occupying nights of 26th and 27th
+      // But check-in 26th and check-out 27th only occupies the night of 26th (no conflict with 27th booking)
+      const range = getDatesInRange(checkIn!, date);
+      const roomDates = bookedDates[selectingRoom] ?? [];
+      const conflictingDates = range.filter((d) => roomDates.includes(d));
+      
+      if (conflictingDates.length > 0) {
+        // Find the first conflicting date to suggest the latest valid checkout
+        const firstConflict = conflictingDates[0];
+        const conflictDate = parseISO(firstConflict);
+        // The latest checkout is the conflict date itself (since checkout date is not occupied)
+        const latestCheckout = format(conflictDate, "MMM dd, yyyy");
+        toast.error(`Cannot select checkout date. Check-out on ${format(new Date(date), "MMM dd")} would require occupying the night of ${format(conflictDate, "MMM dd")}, which is already booked. Latest available check-out: ${latestCheckout}.`);
+        return;
+      }
+      
+      // Also check blocked dates
+      const blockedDates = useBookingStore.getState().blockedRooms[selectingRoom] || [];
+      const blockedInRange = range.filter((d) => blockedDates.includes(d));
+      
+      if (blockedInRange.length > 0) {
+        const firstBlocked = parseISO(blockedInRange[0]);
+        // The latest checkout is the blocked date itself (since checkout date is not occupied)
+        const latestCheckout = format(firstBlocked, "MMM dd, yyyy");
+        toast.error(`Cannot select checkout date. Check-out on ${format(new Date(date), "MMM dd")} would require occupying the night of ${format(firstBlocked, "MMM dd")}, which is blocked. Latest available check-out: ${latestCheckout}.`);
+        return;
+      }
+      
       setCheckOut(date);
       setHoveredDate(null);
       setHoveredCell(null); // Clear hover cue when booking is completed
@@ -132,7 +210,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
   const getStatus = (
     roomNumber: number,
     date: string
-  ): "available" | "booked" | "selecting" | "selected" => {
+  ): "available" | "booked" | "selecting" | "selected" | "blocked" => {
+    // Check if room is blocked first
+    if (isRoomBlocked(roomNumber, date)) return "blocked";
+    
     const roomDates = bookedDates[roomNumber] ?? [];
     if (roomDates.includes(date) || date < today) return "booked";
     if (selectingRoom !== roomNumber) return "available";
@@ -150,6 +231,26 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
       return "selecting";
 
     return "available";
+  };
+
+  // Helper to find booking for a date and determine if it's check-in, check-out, or middle
+  const getBookingPosition = (roomNumber: number, dateStr: string): {
+    booking: Booking | null;
+    isCheckIn: boolean;
+    isCheckOut: boolean;
+    isMiddle: boolean;
+  } => {
+    const booking = findBookingForDate(roomNumber, dateStr);
+    if (!booking) {
+      return { booking: null, isCheckIn: false, isCheckOut: false, isMiddle: false };
+    }
+    const date = parseISO(dateStr);
+    const checkIn = parseISO(booking.checkIn);
+    const checkOut = parseISO(booking.checkOut);
+    const isCheckIn = format(date, "yyyy-MM-dd") === format(checkIn, "yyyy-MM-dd");
+    const isCheckOut = format(date, "yyyy-MM-dd") === format(checkOut, "yyyy-MM-dd");
+    const isMiddle = !isCheckIn && !isCheckOut && date > checkIn && date < checkOut;
+    return { booking, isCheckIn, isCheckOut, isMiddle };
   };
 
   const isInHoverRange = (roomNumber: number, date: string) => {
@@ -281,6 +382,10 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
             Booked
           </span>
           <span className="flex items-center gap-2">
+            <span className="h-4 w-4 rounded border border-orange-300 bg-orange-200" />
+            Blocked
+          </span>
+          <span className="flex items-center gap-2">
             <span className="h-4 w-4 rounded border border-gray-300 bg-primary/15" />
             Selected
           </span>
@@ -357,6 +462,7 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                 {/* Room cells for this day */}
                 {ROOM_CONFIG.rooms.map((room) => {
                   const status = getStatus(room.number, dateStr);
+                  const bookingPos = getBookingPosition(room.number, dateStr);
                   const isCheckIn =
                     selectingRoom === room.number && dateStr === checkIn;
                   const isCheckOut =
@@ -378,21 +484,36 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                   const showCheckInCue = isHovered && !checkIn && status === "available";
                   // Show "check-out" cue when hovering after check-in is selected (same room, date after check-in)
                   const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && status === "available";
+                  
+                  // Determine border classes for multi-night booking connections
+                  const bookingBorderClasses = bookingPos.booking
+                    ? cn(
+                        bookingPos.isCheckIn && "border-l-2 border-l-primary",
+                        bookingPos.isMiddle && "border-l-0 border-r-0",
+                        bookingPos.isCheckOut && "border-r-2 border-r-primary"
+                      )
+                    : "";
+                  
+                  // Add visual connector for multi-night bookings
+                  const showConnector = bookingPos.booking && (bookingPos.isMiddle || bookingPos.isCheckOut);
 
                   return (
                     <button
                       key={room.number}
                       type="button"
-                      disabled={status === "booked"}
                       onClick={() => handleCellClick(room.number, dateStr)}
                       onMouseEnter={() =>
                         handleCellMouseEnter(room.number, dateStr)
                       }
+                      disabled={status === "blocked"}
                       className={cn(
                         "relative flex h-12 items-center justify-center border-b border-r border-gray-200 text-sm font-medium transition-colors",
                         isLastRow && "border-b-0",
+                        bookingBorderClasses,
+                        status === "blocked" &&
+                          "cursor-not-allowed bg-orange-200 text-orange-800 border-orange-300",
                         status === "booked" &&
-                          "cursor-not-allowed bg-red-100",
+                          "cursor-pointer bg-red-100 hover:bg-red-200",
                         status === "available" &&
                           "bg-green-100 text-green-700 hover:bg-green-200 hover:border-green-300 cursor-pointer",
                         (status === "selecting" ||
@@ -409,6 +530,32 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
+                      {/* Multi-night booking connector line */}
+                      {showConnector && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 w-full bg-primary/30 -z-0" />
+                      )}
+                      
+                      {/* Booking code indicator for multi-night bookings */}
+                      {status === "booked" && bookingPos.booking && bookingPos.isCheckIn && (
+                        <div className="absolute top-0.5 left-0.5 px-1 py-0.5 bg-primary/20 rounded text-[8px] font-mono font-semibold text-primary leading-none z-10">
+                          {bookingPos.booking.bookingCode.slice(-4)}
+                        </div>
+                      )}
+                      
+                      {/* Payment status indicator for booked cells */}
+                      {status === "booked" && bookingPos.booking && (
+                        <div className="absolute top-1 right-1 z-10">
+                          <div
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              bookingPos.booking.paymentStatus === "paid" && "bg-green-500",
+                              bookingPos.booking.paymentStatus === "credit" && "bg-yellow-500",
+                              bookingPos.booking.paymentStatus === "unpaid" && "bg-red-500"
+                            )}
+                            title={`Payment: ${bookingPos.booking.paymentStatus}`}
+                          />
+                        </div>
+                      )}
                       {(showCheckInCue || showCheckOutCue) && (
                         <span className="text-xs font-medium text-foreground whitespace-nowrap pointer-events-none">
                           {showCheckInCue ? "Check-in" : "Check-out"}
@@ -475,8 +622,20 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
         Click a date to set check-in, then click a later date to set check-out.
         You’ll be taken to the booking page to complete your details.
       </p>
-          {(hasMoreDays || canCollapse) && (
-            <div className="flex items-center gap-3 flex-shrink-0">
+          {(hasMoreDays || canCollapse || hasPastDates) && (
+            <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+              {hasPastDates && !showPastDates && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPastDates(true);
+                    setVisibleDaysCount(allDays.length);
+                  }}
+                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors whitespace-nowrap"
+                >
+                  Show past dates
+                </button>
+              )}
               {hasMoreDays && (
                 <button
                   type="button"
@@ -504,10 +663,136 @@ export function DesktopCalendar({ onDateSelect }: DesktopCalendarProps) {
                   Collapse
                 </button>
               )}
+              {showPastDates && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPastDates(false);
+                    const futureDays = allDays.filter((d) => format(d, "yyyy-MM-dd") >= today);
+                    setVisibleDaysCount(Math.min(6, futureDays.length));
+                  }}
+                  className="text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors whitespace-nowrap"
+                >
+                  Hide past dates
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Booking Details Modal */}
+      <Modal
+        isOpen={!!selectedBooking}
+        onClose={() => setSelectedBooking(null)}
+        title="Booking Details"
+      >
+        {selectedBooking && (
+          <div className="p-4 sm:p-6 space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Booking Code</span>
+                <span className="text-sm font-mono font-semibold">{selectedBooking.bookingCode}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Room</span>
+                <span className="text-sm font-medium">Room {selectedBooking.roomNumber}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Guest</span>
+                <span className="text-sm font-medium">{selectedBooking.guestName}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Check-in</span>
+                <span className="text-sm font-medium">
+                  {format(new Date(selectedBooking.checkIn), "MMM dd, yyyy")}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Check-out</span>
+                <span className="text-sm font-medium">
+                  {format(new Date(selectedBooking.checkOut), "MMM dd, yyyy")}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Nights</span>
+                <span className="text-sm font-medium">{selectedBooking.nights} night{selectedBooking.nights !== 1 ? 's' : ''}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Rate per night</span>
+                <span className="text-sm font-medium">{formatCurrency(selectedBooking.roomRate)}</span>
+              </div>
+              
+              <div className="border-t pt-3 flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">Total Amount</span>
+                <span className="text-sm font-bold text-primary">{formatCurrency(selectedBooking.totalAmount)}</span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Payment Status</span>
+                {isStaff ? (
+                  <select
+                    value={selectedBooking.paymentStatus}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value as "paid" | "credit" | "unpaid";
+                      try {
+                        const { storageService } = await import("@/lib/services/storageService");
+                        await storageService.updateBooking(selectedBooking.bookingCode, {
+                          paymentStatus: newStatus,
+                          paymentDate: newStatus === "paid" || newStatus === "credit" ? new Date().toISOString() : null,
+                        });
+                        await fetchBookings();
+                        // Update local state
+                        setSelectedBooking({ ...selectedBooking, paymentStatus: newStatus });
+                        toast.success(`Payment status updated to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`);
+                      } catch (error: any) {
+                        toast.error(error.message || "Failed to update payment status");
+                      }
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white pl-3 pr-8 py-1.5 text-sm font-medium text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%236b7280%22%3E%3Cpath%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222%22%20d%3D%22M19%209l-7%207-7-7%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat"
+                  >
+                    <option value="paid">Paid</option>
+                    <option value="credit">Credit</option>
+                    <option value="unpaid">Unpaid</option>
+                  </select>
+                ) : (
+                  <Badge
+                    variant={
+                      selectedBooking.paymentStatus === "paid"
+                        ? "confirmed"
+                        : selectedBooking.paymentStatus === "credit"
+                          ? "pending"
+                          : "cancelled"
+                    }
+                  >
+                    {selectedBooking.paymentStatus.charAt(0).toUpperCase() + selectedBooking.paymentStatus.slice(1)}
+                  </Badge>
+                )}
+              </div>
+              
+              {selectedBooking.guestPhone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Phone</span>
+                  <span className="text-sm font-medium">{selectedBooking.guestPhone}</span>
+                </div>
+              )}
+              
+              {selectedBooking.guestEmail && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Email</span>
+                  <span className="text-sm font-medium">{selectedBooking.guestEmail}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

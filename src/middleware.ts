@@ -14,23 +14,37 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  const isAuthPage = request.nextUrl.pathname.startsWith("/login");
+  const pathname = request.nextUrl.pathname;
+  const isAuthPage = pathname.startsWith("/login");
+  const isPublicRoute = 
+    pathname.startsWith("/book") ||
+    pathname.startsWith("/booking");
   const isProtected =
-    request.nextUrl.pathname.startsWith("/owner") ||
-    request.nextUrl.pathname.startsWith("/receptionist");
+    pathname === "/" ||
+    pathname.startsWith("/owner") ||
+    pathname.startsWith("/receptionist");
 
-  if (isProtected && !currentUser) {
+  // Protect landing page and dashboard routes
+  if (isProtected && !isPublicRoute && !currentUser) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  // Redirect authenticated users away from login page
   if (isAuthPage && currentUser) {
-    const path = currentUser.role === "owner" ? "/owner" : "/receptionist";
-    return NextResponse.redirect(new URL(path, request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/owner/:path*", "/receptionist/:path*", "/login"],
+  matcher: [
+    "/",
+    "/owner/:path*",
+    "/receptionist/:path*",
+    "/login",
+    "/book",
+    "/book/:path*",
+    "/booking/:path*",
+  ],
 };

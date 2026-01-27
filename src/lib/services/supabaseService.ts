@@ -77,7 +77,7 @@ function dbBookingToBooking(dbBooking: DbBooking): Booking {
     accountNumber: dbBooking.account_number,
     bankName: dbBooking.bank_name,
     accountName: dbBooking.account_name,
-    paymentStatus: dbBooking.payment_status as "confirmed",
+    paymentStatus: dbBooking.payment_status as "paid" | "credit" | "unpaid",
     paymentReference: dbBooking.payment_reference,
     paymentDate: dbBooking.payment_date,
     createdAt: dbBooking.created_at,
@@ -248,5 +248,79 @@ export const supabaseService = {
     }
 
     return !!data;
+  },
+
+  // Blocked Rooms
+  async getBlockedRooms(): Promise<Record<number, string[]>> {
+    try {
+      const { data, error } = await supabase
+        .from("blocked_rooms")
+        .select("room_number, blocked_date")
+        .gte("blocked_date", new Date().toISOString().split("T")[0]); // Only future/present dates
+
+      if (error) {
+        console.error("Error fetching blocked rooms:", error);
+        if (error.message?.includes("relation") || error.code === "42P01") {
+          console.warn("Blocked rooms table may not exist yet. Returning empty object.");
+          return {};
+        }
+        throw new Error(`Failed to fetch blocked rooms: ${error.message}`);
+      }
+
+      const result: Record<number, string[]> = {};
+      (data || []).forEach((row: { room_number: number; blocked_date: string }) => {
+        const roomNum = row.room_number;
+        const dateStr = row.blocked_date.split("T")[0]; // Extract date part
+        if (!result[roomNum]) {
+          result[roomNum] = [];
+        }
+        if (!result[roomNum].includes(dateStr)) {
+          result[roomNum].push(dateStr);
+        }
+      });
+
+      // Sort dates for each room
+      Object.keys(result).forEach((roomNum) => {
+        result[Number(roomNum)].sort();
+      });
+
+      return result;
+    } catch (error: any) {
+      if (error?.message?.includes("Failed to fetch") || error?.message?.includes("ERR_NAME_NOT_RESOLVED")) {
+        console.warn("Network error fetching blocked rooms. Check your Supabase connection.");
+        return {};
+      }
+      throw error;
+    }
+  },
+
+  async blockRoom(roomNumber: number, dates: string[], reason?: string): Promise<void> {
+    const records = dates.map((date) => ({
+      room_number: roomNumber,
+      blocked_date: date,
+      reason: reason || null,
+    }));
+
+    const { error } = await supabase.from("blocked_rooms").upsert(records, {
+      onConflict: "room_number,blocked_date",
+    });
+
+    if (error) {
+      console.error("Error blocking room:", error);
+      throw new Error(`Failed to block room: ${error.message}`);
+    }
+  },
+
+  async unblockRoom(roomNumber: number, dates: string[]): Promise<void> {
+    const { error } = await supabase
+      .from("blocked_rooms")
+      .delete()
+      .eq("room_number", roomNumber)
+      .in("blocked_date", dates);
+
+    if (error) {
+      console.error("Error unblocking room:", error);
+      throw new Error(`Failed to unblock room: ${error.message}`);
+    }
   },
 };

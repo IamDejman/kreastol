@@ -1,4 +1,4 @@
-export type PaymentStatus = "confirmed";
+export type PaymentStatus = "paid" | "credit" | "unpaid";
 
 export interface Booking {
   bookingCode: string;

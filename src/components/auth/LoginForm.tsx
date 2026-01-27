@@ -32,9 +32,7 @@ export function LoginForm() {
     clearError();
     try {
       await login(data);
-      const user = useAuthStore.getState().user;
-      const path = user?.role === "owner" ? "/owner" : "/receptionist";
-      router.push(path);
+      router.push("/");
     } catch {
       // Error stored in auth store
     }

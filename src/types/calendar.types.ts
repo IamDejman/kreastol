@@ -1,6 +1,6 @@
 import type { Booking } from "./booking.types";
 
-export type CellStatus = "available" | "booked" | "selecting" | "selected";
+export type CellStatus = "available" | "booked" | "selecting" | "selected" | "blocked";
 
 export interface CalendarCell {
   date: string;
