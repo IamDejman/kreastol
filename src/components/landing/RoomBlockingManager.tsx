@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { format, parseISO, eachDayOfInterval, addDays } from "date-fns";
 import { useBookingStore } from "@/store/bookingStore";
 import { useAuthStore } from "@/store/authStore";
@@ -26,6 +27,7 @@ export function RoomBlockingManager() {
   const [reason, setReason] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   // Only show for authenticated staff (owner or receptionist)
   if (!user || (user.role !== "owner" && user.role !== "receptionist")) {
@@ -83,6 +85,17 @@ export function RoomBlockingManager() {
       setStartDate("");
       setEndDate("");
       setReason("");
+      // After successfully blocking dates, close the manager and
+      // navigate to the main calendar, focused on the blocked week
+      setIsOpen(false);
+      if (startDate) {
+        const params = new URLSearchParams({
+          focusDate: startDate,
+        });
+        router.push(`/?${params.toString()}`);
+      } else {
+        router.push("/");
+      }
     } catch (err: any) {
       setError(err.message || "Failed to block room");
     } finally {

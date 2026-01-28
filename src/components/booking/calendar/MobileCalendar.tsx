@@ -41,6 +41,11 @@ interface MobileCalendarProps {
   onDateSelect: (selection: DateSelection) => void;
   initialRoom?: number;
   /**
+   * Optional date (yyyy-MM-dd) to focus when the calendar first mounts.
+   * The calendar will open on the month/week containing this date.
+   */
+  initialFocusDate?: string;
+  /**
    * Optional max height for the scrollable grid container (e.g. "70vh" or 400).
    * When provided, the calendar body becomes vertically scrollable while headers stay sticky.
    */
@@ -51,8 +56,11 @@ export function MobileCalendar({
   onDateSelect,
   initialRoom = 1,
   maxHeight,
+  initialFocusDate,
 }: MobileCalendarProps) {
-  const [base, setBase] = useState(() => new Date());
+  const [base, setBase] = useState(() =>
+    initialFocusDate ? parseISO(initialFocusDate) : new Date()
+  );
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
@@ -178,13 +186,19 @@ export function MobileCalendar({
     
     const roomDates = bookedDates[roomNumber] ?? [];
     
-    // If cell is booked, show booking details
-    if (roomDates.includes(date) || date < today) {
+    if (date < today) {
       const booking = findBookingForDate(roomNumber, date);
-      if (booking) {
-        setSelectedBooking(booking);
-      }
+      if (booking) setSelectedBooking(booking);
       return;
+    }
+
+    if (roomDates.includes(date)) {
+      const validCheckout = selectingRoom === roomNumber && !!checkIn && date > checkIn && isValidCheckoutOption(roomNumber, date);
+      if (!validCheckout) {
+        const booking = findBookingForDate(roomNumber, date);
+        if (booking) setSelectedBooking(booking);
+        return;
+      }
     }
 
     if (!selectingRoom) {
@@ -288,6 +302,15 @@ export function MobileCalendar({
       return "selecting";
 
     return "available";
+  };
+
+  /** True when we're picking check-out and this booked day is a valid check-out (we leave that morning; no conflict). */
+  const isValidCheckoutOption = (roomNumber: number, date: string): boolean => {
+    if (!checkIn || !selectingRoom || selectingRoom !== roomNumber || date <= checkIn) return false;
+    const rDates = bookedDates[roomNumber] ?? [];
+    const blocked = useBookingStore.getState().blockedRooms[roomNumber] ?? [];
+    const range = getDatesInRange(checkIn, date);
+    return range.every((d) => !rDates.includes(d) && !blocked.includes(d));
   };
 
   const openBlockedOverlay = async (roomNumber: number, date: string) => {
@@ -465,6 +488,17 @@ export function MobileCalendar({
   const handleGridMouseLeave = () => {
     setHoveredCell(null);
   };
+
+  // When an initial focus date is provided, ensure we select the week that contains it
+  useEffect(() => {
+    if (!initialFocusDate || !weeks.length) return;
+    const target = parseISO(initialFocusDate);
+    const weekForTarget =
+      weeks.find((w) => target >= w.start && target <= w.end) ?? null;
+    if (weekForTarget && weekForTarget.key !== selectedWeekKey) {
+      setSelectedWeekKey(weekForTarget.key);
+    }
+  }, [initialFocusDate, weeks, selectedWeekKey]);
 
   const handleCellTouchEnd = () => {
     // Keep cue visible briefly after touch ends
@@ -646,6 +680,14 @@ export function MobileCalendar({
         </div>
           </div>
 
+          {/* Hint: above table */}
+          <div className="border-b border-gray-200 px-4 py-3">
+            <p className="text-xs text-gray-500">
+              Tap a date to set check-in, then tap a later date to set check-out.
+              You'll be taken to the booking page to complete your details.
+            </p>
+          </div>
+
           {/* Selection status */}
           {checkIn && !checkOut && selectingRoom && (
         <div 
@@ -751,10 +793,9 @@ export function MobileCalendar({
                     dateStr > checkIn &&
                     dateStr < checkOut;
                   const isHovered = hoveredCell?.room === room.number && hoveredCell?.date === dateStr;
-                  // Show "check-in" cue when hovering before any selection
+                  const validCheckout = status === "booked" && isValidCheckoutOption(room.number, dateStr);
                   const showCheckInCue = isHovered && !checkIn && status === "available";
-                  // Show "check-out" cue when hovering after check-in is selected (same room, date after check-in)
-                  const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && status === "available";
+                  const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && (status === "available" || validCheckout);
                   
                   // Determine border classes for multi-night booking connections
                   const bookingBorderClasses = bookingPos.booking
@@ -782,6 +823,8 @@ export function MobileCalendar({
                           "cursor-not-allowed bg-orange-200 text-orange-800 border-orange-300",
                         status === "booked" &&
                           "cursor-pointer bg-red-100 hover:bg-red-200 active:bg-red-300",
+                        validCheckout &&
+                          "ring-2 ring-primary ring-inset",
                         status === "available" &&
                           "bg-green-100 text-green-700 active:bg-green-200",
                         status === "past" &&
@@ -870,13 +913,10 @@ export function MobileCalendar({
         </div>
           </div>
 
-          {/* Instructions and week selector */}
+          {/* Week selector */}
           <div 
-        className="border-t border-gray-200 px-4 py-3 space-y-3"
+        className="border-t border-gray-200 px-4 py-3"
       >
-        <p className="text-xs text-gray-500">
-          Tap a date to set check-in, then tap a later date to set check-out.
-        </p>
         <div className="flex flex-wrap gap-2">
           {weeks.map((week) => {
             const label = `${format(week.start, "d")}-${format(week.end, "d")}`;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useBookings } from "@/hooks/useBookings";
 import { MobileCalendar } from "@/components/booking/calendar/MobileCalendar";
@@ -11,7 +11,10 @@ export function CalendarSection() {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoading, hasLoadedBookings } = useBookings();
+
+  const focusDate = searchParams.get("focusDate") || undefined;
 
   const handleDateSelect = (selection: {
     roomNumber: number;
@@ -32,9 +35,17 @@ export function CalendarSection() {
       <span>Loading availability…</span>
     </div>
   ) : isMobile || isTablet ? (
-    <MobileCalendar onDateSelect={handleDateSelect} maxHeight="70vh" />
+    <MobileCalendar
+      onDateSelect={handleDateSelect}
+      maxHeight="70vh"
+      initialFocusDate={focusDate}
+    />
   ) : (
-    <DesktopCalendar onDateSelect={handleDateSelect} maxHeight="60vh" />
+    <DesktopCalendar
+      onDateSelect={handleDateSelect}
+      maxHeight="60vh"
+      initialFocusDate={focusDate}
+    />
   );
 
   return (

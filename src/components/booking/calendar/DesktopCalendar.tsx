@@ -40,14 +40,25 @@ function formatOrdinalDate(date: Date): string {
 interface DesktopCalendarProps {
   onDateSelect: (selection: DateSelection) => void;
   /**
+   * Optional date (yyyy-MM-dd) to focus when the calendar first mounts.
+   * The calendar will open on the month/week containing this date.
+   */
+  initialFocusDate?: string;
+  /**
    * Optional max height for the scrollable grid container (e.g. "60vh" or 400).
    * When provided, the calendar body becomes vertically scrollable while headers stay sticky.
    */
   maxHeight?: string | number;
 }
 
-export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProps) {
-  const [base, setBase] = useState(() => new Date());
+export function DesktopCalendar({
+  onDateSelect,
+  maxHeight,
+  initialFocusDate,
+}: DesktopCalendarProps) {
+  const [base, setBase] = useState(() =>
+    initialFocusDate ? parseISO(initialFocusDate) : new Date()
+  );
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [selectingRoom, setSelectingRoom] = useState<number | null>(null);
@@ -149,7 +160,17 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
     viewMode === "all" || !activeWeek
       ? allDays
       : eachDayOfInterval({ start: activeWeek.start, end: activeWeek.end });
-
+ 
+  // When an initial focus date is provided, ensure we select the week that contains it
+  useEffect(() => {
+    if (!initialFocusDate || !weeks.length) return;
+    const target = parseISO(initialFocusDate);
+    const weekForTarget =
+      weeks.find((w) => target >= w.start && target <= w.end) ?? null;
+    if (weekForTarget && weekForTarget.key !== selectedWeekKey) {
+      setSelectedWeekKey(weekForTarget.key);
+    }
+  }, [initialFocusDate, weeks, selectedWeekKey]);
 
   const isRangeAvailable = (roomNumber: number, from: string, to: string) => {
     const roomDates = bookedDates[roomNumber] ?? [];
@@ -161,6 +182,15 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
       const str = format(d, "yyyy-MM-dd");
       return !roomDates.includes(str);
     });
+  };
+
+  /** True when we're picking check-out and this booked day is a valid check-out (we leave that morning; no conflict). */
+  const isValidCheckoutOption = (roomNumber: number, date: string): boolean => {
+    if (!checkIn || !selectingRoom || selectingRoom !== roomNumber || date <= checkIn) return false;
+    const roomDates = bookedDates[roomNumber] ?? [];
+    const blockedDates = useBookingStore.getState().blockedRooms[roomNumber] ?? [];
+    const range = getDatesInRange(checkIn, date);
+    return range.every((d) => !roomDates.includes(d) && !blockedDates.includes(d));
   };
 
   // Find booking for a specific room and date
@@ -187,13 +217,22 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
     
     const roomDates = bookedDates[roomNumber] ?? [];
     
-    // If cell is booked, show booking details
-    if (roomDates.includes(date) || date < today) {
+    // Past: always show details only, never select
+    if (date < today) {
       const booking = findBookingForDate(roomNumber, date);
-      if (booking) {
-        setSelectedBooking(booking);
-      }
+      if (booking) setSelectedBooking(booking);
       return;
+    }
+
+    // Booked: show details unless we're picking check-out and this is a valid check-out (we leave that morning)
+    if (roomDates.includes(date)) {
+      const validCheckout = selectingRoom === roomNumber && !!checkIn && date > checkIn && isValidCheckoutOption(roomNumber, date);
+      if (!validCheckout) {
+        const booking = findBookingForDate(roomNumber, date);
+        if (booking) setSelectedBooking(booking);
+        return;
+      }
+      // valid check-out on a booked day — fall through to check-out logic
     }
 
     if (!selectingRoom) {
@@ -460,10 +499,14 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
       checkOut ||
       selectingRoom !== roomNumber ||
       date <= checkIn ||
-      bookedDates[roomNumber]?.includes(date) ||
       date < today
     )
       return;
+    const isBooked = !!bookedDates[roomNumber]?.includes(date);
+    if (isBooked) {
+      if (isValidCheckoutOption(roomNumber, date)) setHoveredDate(date);
+      return;
+    }
     if (!isRangeAvailable(roomNumber, checkIn, date)) return;
     setHoveredDate(date);
   };
@@ -606,6 +649,17 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
         </div>
       </div>
 
+      {/* Hint: above table */}
+      <div
+        className="border-b border-gray-200 px-6 py-3"
+        style={{ width: gridWidth }}
+      >
+        <p className="text-xs text-gray-500">
+          Click a date to set check-in, then click a later date to set check-out.
+          You'll be taken to the booking page to complete your details.
+        </p>
+      </div>
+
       {/* Grid */}
       <div
         ref={scrollContainerRef}
@@ -700,10 +754,11 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
                     selectingRoom === room.number &&
                     dateStr === hoveredDate;
                   const isHovered = hoveredCell?.room === room.number && hoveredCell?.date === dateStr;
+                  const validCheckout = status === "booked" && isValidCheckoutOption(room.number, dateStr);
                   // Show "check-in" cue when hovering before any selection
                   const showCheckInCue = isHovered && !checkIn && status === "available";
-                  // Show "check-out" cue when hovering after check-in is selected (same room, date after check-in)
-                  const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && status === "available";
+                  // Show "check-out" cue when hovering after check-in (available or booked-but-valid-checkout)
+                  const showCheckOutCue = isHovered && !!checkIn && !checkOut && selectingRoom === room.number && dateStr > checkIn && (status === "available" || validCheckout);
                   
                   // Determine border classes for multi-night booking connections
                   const bookingBorderClasses = bookingPos.booking
@@ -731,6 +786,8 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
                           "cursor-not-allowed bg-orange-200 text-orange-800 border-orange-300",
                         status === "booked" &&
                           "cursor-pointer bg-red-100 hover:bg-red-200",
+                        validCheckout &&
+                          "ring-2 ring-primary ring-inset hover:ring-primary",
                         status === "available" &&
                           "bg-green-100 text-green-700 hover:bg-green-200 hover:border-green-300 cursor-pointer",
                         status === "past" &&
@@ -829,11 +886,7 @@ export function DesktopCalendar({ onDateSelect, maxHeight }: DesktopCalendarProp
         className="border-t border-gray-200 px-6 py-3"
         style={{ width: gridWidth }}
       >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-xs text-gray-500">
-            Click a date to set check-in, then click a later date to set check-out.
-            You’ll be taken to the booking page to complete your details.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
           <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
             {weeks.map((week) => {
               const label = `${format(week.start, "d")}-${format(week.end, "d")}`;
