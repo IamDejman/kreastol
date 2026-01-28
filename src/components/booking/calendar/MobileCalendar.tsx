@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useRef, useEffect } from "react";
+import { useState, Fragment, useRef, useEffect, useMemo } from "react";
 import {
   format,
   addMonths,
@@ -114,22 +114,24 @@ export function MobileCalendar({
   }, [isStaff, user]);
 
   // Build Sunday–Saturday weeks for the month (clamped to month boundaries)
-  const firstWeekStart = startOfWeek(start, { weekStartsOn: 0 });
   type WeekSegment = { start: Date; end: Date; key: string };
-  const weeks: WeekSegment[] = [];
-  let cursor = firstWeekStart;
-
-  while (cursor <= end) {
-    const weekStart = cursor < start ? start : cursor;
-    const weekEndCandidate = addDays(cursor, 6);
-    const weekEnd = weekEndCandidate > end ? end : weekEndCandidate;
-    weeks.push({
-      start: weekStart,
-      end: weekEnd,
-      key: `${format(weekStart, "yyyy-MM-dd")}_${format(weekEnd, "yyyy-MM-dd")}`,
-    });
-    cursor = addDays(cursor, 7);
-  }
+  const weeks = useMemo<WeekSegment[]>(() => {
+    const firstWeekStart = startOfWeek(start, { weekStartsOn: 0 });
+    const result: WeekSegment[] = [];
+    let cursor = firstWeekStart;
+    while (cursor <= end) {
+      const weekStart = cursor < start ? start : cursor;
+      const weekEndCandidate = addDays(cursor, 6);
+      const weekEnd = weekEndCandidate > end ? end : weekEndCandidate;
+      result.push({
+        start: weekStart,
+        end: weekEnd,
+        key: `${format(weekStart, "yyyy-MM-dd")}_${format(weekEnd, "yyyy-MM-dd")}`,
+      });
+      cursor = addDays(cursor, 7);
+    }
+    return result;
+  }, [start, end]);
 
   // Determine active week: either user-selected, or the one containing today, or the first week
   const findWeekByKey = (key: string | null): WeekSegment | null => {
@@ -684,7 +686,7 @@ export function MobileCalendar({
           <div className="border-b border-gray-200 px-4 py-3">
             <p className="text-xs text-gray-500">
               Tap a date to set check-in, then tap a later date to set check-out.
-              You'll be taken to the booking page to complete your details.
+              You&apos;ll be taken to the booking page to complete your details.
             </p>
           </div>
 
