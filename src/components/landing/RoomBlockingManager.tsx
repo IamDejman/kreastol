@@ -12,7 +12,12 @@ import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils/cn";
 import { X, Lock, Unlock } from "lucide-react";
 
-export function RoomBlockingManager() {
+interface RoomBlockingManagerProps {
+  /** Path to redirect to after block/unblock (e.g. "/staff" for staff calendar). Default "/". */
+  returnPath?: string;
+}
+
+export function RoomBlockingManager({ returnPath = "/" }: RoomBlockingManagerProps) {
   const user = useAuthStore((s) => s.user);
   const blockedRooms = useBookingStore((s) => s.blockedRooms);
   const bookedDates = useBookingStore((s) => s.bookedDates);
@@ -92,9 +97,9 @@ export function RoomBlockingManager() {
         const params = new URLSearchParams({
           focusDate: startDate,
         });
-        router.push(`/?${params.toString()}`);
+        router.push(`${returnPath}?${params.toString()}`);
       } else {
-        router.push("/");
+        router.push(returnPath);
       }
     } catch (err: any) {
       setError(err.message || "Failed to block room");

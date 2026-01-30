@@ -46,7 +46,7 @@ export function MobileHeader() {
   return (
     <>
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-4 md:hidden">
-        <Link href="/">
+        <Link href={pathname.startsWith("/staff") ? "/staff" : "/"}>
           <span className="font-heading text-sm font-semibold text-primary sm:text-base md:text-lg">
             {HOTEL_INFO.name}
           </span>

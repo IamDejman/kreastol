@@ -65,7 +65,7 @@ export function BookingCard({ booking, onRefresh }: BookingCardProps) {
 
   return (
     <div className="card block transition-shadow hover:shadow-lg">
-      <Link href={`/booking/${booking.bookingCode}?from=receptionist`} className="block">
+      <Link href={`/staff/booking/${booking.bookingCode}?from=receptionist`} className="block">
         <div className="flex items-start justify-between">
           <div>
             <p className="font-medium text-foreground">{booking.bookingCode}</p>

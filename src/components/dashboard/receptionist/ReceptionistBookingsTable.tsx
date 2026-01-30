@@ -89,7 +89,7 @@ export function ReceptionistBookingsTable({ bookings, onRefresh }: ReceptionistB
             <tr key={b.bookingCode} className="border-b last:border-0">
               <td className="px-4 py-3">
                 <Link
-                  href={`/booking/${b.bookingCode}?from=receptionist`}
+                  href={`/staff/booking/${b.bookingCode}?from=receptionist`}
                   className="font-medium text-primary hover:underline"
                 >
                   {b.bookingCode}

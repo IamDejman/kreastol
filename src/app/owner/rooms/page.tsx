@@ -13,7 +13,7 @@ export default function OwnerRoomsPage() {
           Block or unblock rooms for maintenance, repairs, or other reasons.
         </p>
       </div>
-      <RoomBlockingManager />
+      <RoomBlockingManager returnPath="/staff" />
     </div>
   );
 }

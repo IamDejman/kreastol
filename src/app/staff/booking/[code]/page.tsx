@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { BookingStatusPageContent } from "@/components/booking/BookingStatusPageContent";
 
-export default function BookingStatusPage() {
+export default function StaffBookingStatusPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function BookingStatusPage() {
         </div>
       }
     >
-      <BookingStatusPageContent basePath="" />
+      <BookingStatusPageContent basePath="/staff" />
     </Suspense>
   );
 }

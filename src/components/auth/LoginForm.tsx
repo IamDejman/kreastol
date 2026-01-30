@@ -59,11 +59,11 @@ export function LoginForm() {
         toast.success(`Welcome back, ${user.name}!`);
         // Small delay to ensure cookie is set and toast is visible
         setTimeout(() => {
-          window.location.href = "/";
+          window.location.href = "/staff";
         }, 300);
       } else {
         // Fallback if user not in store
-        router.replace("/");
+        router.replace("/staff");
       }
     } catch (err) {
       // Error stored in auth store

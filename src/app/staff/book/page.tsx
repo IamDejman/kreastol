@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { BookPageContent } from "@/components/booking/BookPageContent";
 
-export default function BookPage() {
+export default function StaffBookPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function BookPage() {
         </div>
       }
     >
-      <BookPageContent basePath="" />
+      <BookPageContent basePath="/staff" />
     </Suspense>
   );
 }

@@ -111,7 +111,7 @@ export function Sidebar({ role }: SidebarProps) {
         <div className="border-t p-2 flex-shrink-0">
           {!isCollapsed && (
             <Link
-              href="/"
+              href="/staff"
               className="flex min-h-touch items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
             >
               ← Back to site

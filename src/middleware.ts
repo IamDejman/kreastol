@@ -16,22 +16,19 @@ export function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isAuthPage = pathname.startsWith("/login");
-  const isPublicRoute = 
-    pathname.startsWith("/book") ||
-    pathname.startsWith("/booking");
   const isProtected =
-    pathname === "/" ||
+    pathname.startsWith("/staff") ||
     pathname.startsWith("/owner") ||
     pathname.startsWith("/receptionist");
 
-  // Protect landing page and dashboard routes
-  if (isProtected && !isPublicRoute && !currentUser) {
+  // Protect staff and dashboard routes
+  if (isProtected && !currentUser) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Redirect authenticated users away from login page
+  // Redirect authenticated users away from login page to staff landing
   if (isAuthPage && currentUser) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/staff", request.url));
   }
 
   return NextResponse.next();
@@ -40,6 +37,8 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/staff",
+    "/staff/:path*",
     "/owner/:path*",
     "/receptionist/:path*",
     "/login",

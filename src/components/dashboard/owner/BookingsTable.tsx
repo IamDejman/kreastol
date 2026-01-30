@@ -89,7 +89,7 @@ export function BookingsTable({ bookings, onRefresh }: BookingsTableProps) {
             <tr key={b.bookingCode} className="border-b last:border-0">
               <td className="px-4 py-3">
                 <Link
-                  href={`/booking/${b.bookingCode}?from=owner`}
+                  href={`/staff/booking/${b.bookingCode}?from=owner`}
                   className="font-medium text-primary hover:underline"
                 >
                   {b.bookingCode}

@@ -13,7 +13,12 @@ import { Button } from "@/components/ui/Button";
 import { BookingSummary } from "@/components/booking/BookingSummary";
 import type { DateSelection } from "@/types";
 
-export function CalendarSection() {
+interface CalendarSectionProps {
+  /** Base path for booking flow (e.g. "" for customer, "/staff" for staff). "Complete booking" goes to ${bookingBasePath}/book */
+  bookingBasePath?: string;
+}
+
+export function CalendarSection({ bookingBasePath = "" }: CalendarSectionProps) {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const router = useRouter();
@@ -40,7 +45,7 @@ export function CalendarSection() {
       checkOut: selectionForModal.checkOut,
     });
     closeSelectionModal();
-    router.push(`/book?${params.toString()}`);
+    router.push(`${bookingBasePath}/book?${params.toString()}`);
   };
 
   const calendarContent = !hasLoadedBookings || isLoading ? (

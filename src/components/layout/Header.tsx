@@ -23,7 +23,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 hidden border-b bg-white md:block">
       <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-4 lg:px-8">
-        <Link href="/">
+        <Link href={pathname.startsWith("/staff") ? "/staff" : "/"}>
           <span className="font-heading text-xl font-semibold text-primary">
             {HOTEL_INFO.name}
           </span>
