@@ -28,6 +28,7 @@ export function BookingStatusPageContent({ basePath = "" }: BookingStatusPageCon
   const [booking, setBooking] = useState<Booking | null>(null);
   const [checked, setChecked] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showTransferredMessage, setShowTransferredMessage] = useState(false);
   const [isUpdatingMethod, setIsUpdatingMethod] = useState(false);
   const toast = useToast();
   const user = useAuthStore((s) => s.user);
@@ -177,10 +178,45 @@ export function BookingStatusPageContent({ basePath = "" }: BookingStatusPageCon
             </div>
           </div>
 
-          <div className="mt-8">
-            <Button fullWidth onClick={() => router.push(doneUrl)}>
-              Done
+          <div className="mt-8 space-y-4">
+            <Button fullWidth onClick={() => setShowTransferredMessage(true)}>
+              I have transferred
             </Button>
+            {showTransferredMessage && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-6 space-y-4">
+                <p className="text-sm text-foreground">
+                  Thank you! Please send your payment receipt via WhatsApp or SMS to{" "}
+                  <a href={`tel:${paymentPhone}`} className="font-semibold underline">
+                    {paymentPhone}
+                  </a>
+                  .
+                </p>
+                <p className="text-sm text-foreground">
+                  Your reservation is held for 30 minutes. If we don&apos;t confirm your payment within this time, your dates will be released and you&apos;ll need to book again.
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  Booking reference: <span className="font-mono">{booking.bookingCode}</span>
+                </p>
+                <div className="flex flex-col gap-2 pt-2">
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={handleCopyBookingCode}
+                    className="flex items-center justify-center gap-2"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-success" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                    {copied ? "Copied!" : "Copy booking reference"}
+                  </Button>
+                  <Button fullWidth onClick={() => router.push("/")}>
+                    Back to home
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

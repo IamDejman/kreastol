@@ -1,6 +1,6 @@
 import { MobileHeader } from "@/components/layout/MobileHeader";
 import { Header } from "@/components/layout/Header";
-import { CalendarSection } from "@/components/landing/CalendarSection";
+import { CustomerBookingWidget } from "@/components/booking/CustomerBookingWidget";
 import { Footer } from "@/components/layout/Footer";
 
 export default function LandingPage() {
@@ -14,7 +14,7 @@ export default function LandingPage() {
       </div>
 
       <main>
-        <CalendarSection />
+        <CustomerBookingWidget />
       </main>
 
       <Footer />

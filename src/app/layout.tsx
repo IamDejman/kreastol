@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/Toast";
 import { GlobalModals } from "@/components/layout/GlobalModals";
+import { LayoutWithBottomNav } from "@/components/layout/LayoutWithBottomNav";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -43,7 +44,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <body className="font-body antialiased">
         <Providers>
-          {children}
+          <LayoutWithBottomNav>{children}</LayoutWithBottomNav>
           <Toaster />
           <GlobalModals />
         </Providers>
