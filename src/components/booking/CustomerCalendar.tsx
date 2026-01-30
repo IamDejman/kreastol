@@ -88,7 +88,7 @@ export function CustomerCalendar({
     if (mode === "check-in") {
       if (isUnavailable(dateStr)) return;
       onSelectCheckIn(dateStr);
-      onClose();
+      // Don't close – parent will switch to check-out mode and keep calendar open
       return;
     }
     // mode === "check-out"

@@ -49,6 +49,8 @@ export function CustomerBookingWidget() {
   function handleSelectCheckIn(date: string) {
     setCheckIn(date);
     setCheckOut(null);
+    setCalendarMode("check-out");
+    setCalendarOpen(true);
   }
 
   function handleSelectCheckOut(date: string) {
