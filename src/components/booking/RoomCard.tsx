@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/formatters";
 import type { ROOM_CONFIG } from "@/lib/constants/config";
@@ -25,15 +24,6 @@ export function RoomCard({ room, selected, onSelect }: RoomCardProps) {
           : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
       )}
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
-        <Image
-          src={`/images/rooms/room-${room.number}.jpg`}
-          alt={room.name}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 280px"
-        />
-      </div>
       <div className="flex flex-col gap-1 p-4">
         <span className="font-heading text-lg font-semibold text-foreground">
           {room.name}
