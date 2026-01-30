@@ -161,9 +161,9 @@ export function CustomerCalendar({
                 "flex min-h-touch min-w-touch items-center justify-center rounded-lg text-sm font-medium transition-colors",
                 !isCurrentMonth && "text-gray-300",
                 isCurrentMonth && status === "past" && "cursor-default bg-gray-100 text-gray-400",
-                isCurrentMonth && status === "unavailable" && !validCheckout && "cursor-not-allowed bg-gray-100 text-gray-400",
-                isCurrentMonth && status === "unavailable" && validCheckout && "ring-2 ring-primary ring-inset hover:bg-primary/10 cursor-pointer bg-gray-100 text-gray-600",
-                isCurrentMonth && status === "available" && "hover:bg-primary/10 text-foreground",
+                isCurrentMonth && status === "unavailable" && !validCheckout && "cursor-not-allowed bg-red-100 text-red-700",
+                isCurrentMonth && status === "unavailable" && validCheckout && "ring-2 ring-primary ring-inset hover:bg-primary/10 cursor-pointer bg-red-100 text-red-600",
+                isCurrentMonth && status === "available" && "bg-green-100 text-green-700 hover:bg-green-200",
                 status === "selected" && "bg-primary text-white",
                 isClickable && "cursor-pointer"
               )}
