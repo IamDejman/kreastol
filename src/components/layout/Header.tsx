@@ -19,6 +19,11 @@ export function Header() {
   };
 
   const isOwner = user?.role === "owner";
+  const isCustomerPath =
+    pathname === "/" ||
+    pathname === "/book" ||
+    pathname === "/my-bookings" ||
+    pathname.startsWith("/booking/");
 
   return (
     <header className="sticky top-0 z-30 hidden border-b bg-white md:block">
@@ -29,6 +34,19 @@ export function Header() {
           </span>
         </Link>
         <nav className="flex items-center gap-6">
+          {isCustomerPath && (
+            <Link
+              href="/my-bookings"
+              className={cn(
+                "text-sm font-medium transition-colors",
+                pathname === "/my-bookings"
+                  ? "text-primary"
+                  : "text-gray-600 hover:text-primary"
+              )}
+            >
+              My Bookings
+            </Link>
+          )}
           {isOwner && (
             <>
               <Link
