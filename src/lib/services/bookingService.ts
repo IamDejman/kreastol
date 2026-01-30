@@ -8,6 +8,13 @@ import {
 } from "@/lib/utils/generators";
 import type { PaymentMethod, PaymentStatus } from "@/types";
 
+/** True if this booking should block availability: paid or unpaid with an unexpired hold. */
+function isBookingBlocking(b: Booking): boolean {
+  if (b.paymentStatus === "paid") return true;
+  if (b.paymentStatus !== "unpaid" || !b.holdExpiresAt) return false;
+  return new Date(b.holdExpiresAt) > new Date();
+}
+
 export async function getBookedDates(): Promise<Record<number, string[]>> {
   const bookings = await storageService.getBookings();
   const result: Record<number, string[]> = {};
@@ -16,7 +23,10 @@ export async function getBookedDates(): Promise<Record<number, string[]>> {
     result[r] = [];
   }
 
+  const now = new Date();
   for (const b of bookings) {
+    // Only paid bookings, or unpaid with unexpired hold, block dates
+    if (!isBookingBlocking(b)) continue;
     // For booked dates, we need to include all nights from check-in to check-out (exclusive of checkout)
     // getDatesInRange already does this correctly (excludes checkout date)
     const dates = getDatesInRange(b.checkIn, b.checkOut);
@@ -85,14 +95,13 @@ export async function createBooking(
   const bank = getMockBankDetails();
   const now = new Date().toISOString();
 
-  const paymentStatus: PaymentStatus = formData.paymentStatus ?? "unpaid";
-  const isPaid = paymentStatus === "paid";
-  const paymentMethod: PaymentMethod | undefined = isPaid
-    ? (formData.paymentMethod ?? "transfer")
-    : undefined;
-  const paymentReference =
-    isPaid ? `MANUAL-${Date.now()}` : `MOCK-${Date.now()}`;
-  const paymentDate = isPaid ? now : null;
+  // Public customer flow: always unpaid with 30-minute hold
+  const paymentStatus: PaymentStatus = "unpaid";
+  const isPaid = false;
+  const paymentMethod: PaymentMethod | undefined = undefined;
+  const paymentReference = `MOCK-${Date.now()}`;
+  const paymentDate: string | null = null;
+  const holdExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
   const booking: Booking = {
     bookingCode: generateBookingCode(),
@@ -105,7 +114,6 @@ export async function createBooking(
     guestName: formData.guestName,
     guestPhone: formData.guestPhone,
     guestEmail: formData.guestEmail,
-    // Payment account details - kept for type compatibility but not displayed
     accountNumber: bank.accountNumber,
     bankName: bank.bankName,
     accountName: bank.accountName,
@@ -113,6 +121,7 @@ export async function createBooking(
     paymentMethod,
     paymentReference,
     paymentDate,
+    holdExpiresAt,
     createdAt: now,
     updatedAt: now,
   };

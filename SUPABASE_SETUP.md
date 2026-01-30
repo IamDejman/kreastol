@@ -16,18 +16,16 @@ This project uses Supabase as the database backend instead of browser localStora
 3. Fill in your project details (name, database password, region)
 4. Wait for the project to be created
 
-### 2. Run Database Migration
+### 2. Run Database Migrations
 
 1. In your Supabase project dashboard, go to "SQL Editor"
-2. Open the file `supabase/migrations/001_initial_schema.sql`
-3. Copy the entire SQL content
-4. Paste it into the SQL Editor in Supabase
-5. Click "Run" to execute the migration
+2. Run each migration file in order: `supabase/migrations/001_initial_schema.sql` through `011_enable_rls_and_fix_guest_stats.sql`. For each file: copy the entire SQL content, paste into the SQL Editor, and click "Run".
 
 This will create:
 - `users` table for authentication
 - `bookings` table for booking data
-- Necessary indexes and triggers
+- Other tables and indexes (blocked_rooms, audit_logs, password_resets, etc.)
+- Row Level Security enabled on all public tables (migration 011)
 
 ### 3. Get Your Supabase Credentials
 
@@ -35,6 +33,7 @@ This will create:
 2. Copy the following values:
    - **Project URL** (under "Project URL")
    - **anon/public key** (under "Project API keys" → "anon public")
+   - **service_role key** (under "Project API keys" → "service_role" — keep this secret; never commit it or expose it to the client)
 
 ### 4. Configure Environment Variables
 
@@ -44,7 +43,10 @@ This will create:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_actual_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_actual_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_actual_service_role_key
 ```
+
+**Important:** `SUPABASE_SERVICE_ROLE_KEY` must be set for the app to work. It is used only by API routes (server-side) to access the database and bypasses Row Level Security. Never add `NEXT_PUBLIC_` to this variable and never expose it to the client or commit it to version control.
 
 ### 5. Create Initial Users
 
@@ -70,14 +72,13 @@ Create your own owner and receptionist accounts either:
 ## Security Notes
 
 - Passwords are stored as bcrypt hashes via the API – never as plain text.
-- For production, also consider:
-  - Using Supabase Auth instead of custom authentication
-  - Implementing Row Level Security (RLS) policies
+- **Row Level Security (RLS)** is enabled on all public tables (`users`, `bookings`, `blocked_rooms`, `audit_logs`, `password_resets`). No policies are granted to the anon role, so direct PostgREST access with the anon key cannot read or write any rows. All database access from the app goes through Next.js API routes, which use the service role key and therefore bypass RLS. This keeps sensitive data (e.g. passwords, account numbers) off the public API.
+- The **service_role** key must only be used server-side (e.g. in API routes). Never expose it to the client or commit it to version control.
 
 ## Troubleshooting
 
 ### "Missing Supabase environment variables" error
-- Make sure `.env.local` has the correct `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Make sure `.env.local` has `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` (from Supabase Dashboard → Settings → API → service_role)
 - Restart your development server after updating `.env.local`
 
 ### "Failed to fetch bookings/users" errors

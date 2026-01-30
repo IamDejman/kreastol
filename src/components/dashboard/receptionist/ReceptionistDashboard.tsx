@@ -148,9 +148,9 @@ export function ReceptionistDashboard() {
       </div>
 
       {isMobile || isTablet ? (
-        <ReceptionistMobileBookingsTable bookings={paginatedBookings} />
+        <ReceptionistMobileBookingsTable bookings={paginatedBookings} onRefresh={refresh} />
       ) : (
-        <ReceptionistBookingsTable bookings={paginatedBookings} />
+        <ReceptionistBookingsTable bookings={paginatedBookings} onRefresh={refresh} />
       )}
 
       {totalPages > 1 && (

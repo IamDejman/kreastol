@@ -23,6 +23,7 @@ interface DbBooking {
   payment_method: string | null;
   payment_reference: string | null;
   payment_date: string | null;
+  hold_expires_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,7 @@ function dbBookingToBooking(dbBooking: DbBooking): Booking {
     paymentMethod: (dbBooking.payment_method as Booking["paymentMethod"]) ?? undefined,
     paymentReference: dbBooking.payment_reference,
     paymentDate: dbBooking.payment_date,
+    holdExpiresAt: dbBooking.hold_expires_at ?? null,
     createdAt: dbBooking.created_at,
     updatedAt: dbBooking.updated_at,
   };
@@ -76,6 +78,7 @@ function bookingToDbBooking(booking: Booking): Omit<DbBooking, "id" | "created_a
     payment_method: booking.paymentMethod ?? null,
     payment_reference: booking.paymentReference,
     payment_date: booking.paymentDate,
+    hold_expires_at: booking.holdExpiresAt ?? null,
   };
 }
 

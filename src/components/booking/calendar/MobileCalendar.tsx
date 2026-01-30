@@ -190,7 +190,7 @@ export function MobileCalendar({
     
     if (date < today) {
       const booking = findBookingForDate(roomNumber, date);
-      if (booking) setSelectedBooking(booking);
+      if (booking && isStaff) setSelectedBooking(booking);
       return;
     }
 
@@ -198,7 +198,7 @@ export function MobileCalendar({
       const validCheckout = selectingRoom === roomNumber && !!checkIn && date > checkIn && isValidCheckoutOption(roomNumber, date);
       if (!validCheckout) {
         const booking = findBookingForDate(roomNumber, date);
-        if (booking) setSelectedBooking(booking);
+        if (booking && isStaff) setSelectedBooking(booking);
         return;
       }
     }
@@ -547,13 +547,8 @@ export function MobileCalendar({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-full overflow-hidden">
-      <div className="overflow-x-auto">
-        <div
-          className="inline-block align-top"
-          style={{ minWidth: gridWidth }}
-        >
-          {/* Header with month nav */}
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-full">
+      {/* Header with month nav */}
           <div 
         className="flex items-center justify-between border-b border-gray-200 py-3 relative"
       >
@@ -717,7 +712,7 @@ export function MobileCalendar({
           }}
         >
           {/* Top-left corner */}
-          <div className="sticky left-0 top-0 z-20 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-gray-50">
+          <div className="sticky left-0 top-0 z-20 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-white">
             <span className="text-sm font-medium text-foreground">DAY</span>
           </div>
 
@@ -725,7 +720,7 @@ export function MobileCalendar({
           {ROOM_CONFIG.rooms.map((room, roomIndex) => (
             <div
               key={room.number}
-              className="sticky top-0 z-10 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-3"
+              className="sticky top-0 z-20 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-white px-3"
             >
               <span className="text-sm font-medium text-foreground">
                 {room.name}
@@ -737,7 +732,7 @@ export function MobileCalendar({
           ))}
           
           {/* Revenue header */}
-          <div className="sticky top-0 z-10 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-3">
+          <div className="sticky top-0 z-20 flex h-14 flex-col justify-center border-b border-r border-gray-200 bg-white px-3">
             <span className="text-sm font-medium text-foreground">
               Revenue
             </span>
@@ -760,7 +755,7 @@ export function MobileCalendar({
                 {/* Day label */}
                 <div
                   className={cn(
-                    "sticky left-0 z-10 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-white px-2",
+                    "sticky left-0 z-20 flex h-14 items-center justify-center border-b border-r border-gray-200 bg-white px-2",
                     isLastRow && "border-b-0"
                   )}
                   ref={isAnchorDay ? weekAnchorRef : undefined}
@@ -839,15 +834,15 @@ export function MobileCalendar({
                         isCheckOut && "rounded-b-md bg-primary/20"
                       )}
                     >
-                      {/* Booking code indicator for multi-night bookings */}
-                      {status === "booked" && bookingPos.booking && bookingPos.isCheckIn && (
+                      {/* Booking code indicator for multi-night bookings (staff only) */}
+                      {status === "booked" && bookingPos.booking && bookingPos.isCheckIn && isStaff && (
                         <div className="absolute top-0.5 left-0.5 px-1 py-0.5 bg-primary/20 rounded text-[8px] font-mono font-semibold text-primary leading-none z-10">
                           {bookingPos.booking.bookingCode.slice(-4)}
                         </div>
                       )}
-                      
-                      {/* Payment status indicator for booked cells */}
-                      {status === "booked" && bookingPos.booking && (
+
+                      {/* Payment status indicator for booked cells (staff only) */}
+                      {status === "booked" && bookingPos.booking && isStaff && (
                         <div className="absolute top-1 right-1 z-10">
                           <div
                             className={cn(
@@ -960,8 +955,6 @@ export function MobileCalendar({
           >
             View all days
           </button>
-        </div>
-          </div>
         </div>
       </div>
 

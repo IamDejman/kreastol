@@ -17,7 +17,8 @@ export default function OwnerLayout({
 
   const isGuestsPage = pathname === "/owner/guests";
   const isAuditLogPage = pathname === "/owner/audit-log";
-  const useLandingLayout = isGuestsPage || isAuditLogPage;
+  const isUsersPage = pathname === "/owner/users";
+  const useLandingLayout = isGuestsPage || isAuditLogPage || isUsersPage;
 
   return (
     <ProtectedRoute>

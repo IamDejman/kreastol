@@ -21,6 +21,13 @@ export interface Booking {
   paymentMethod?: PaymentMethod;
   paymentReference: string | null;
   paymentDate: string | null;
+  /**
+   * For customer-facing bookings, this is the time until which
+   * the booking is held before staff confirmation. After this
+   * timestamp passes (and while paymentStatus is still "unpaid"),
+   * the dates should no longer block availability.
+   */
+  holdExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

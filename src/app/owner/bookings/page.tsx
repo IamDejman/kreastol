@@ -17,7 +17,7 @@ import { useAuthStore } from "@/store/authStore";
 import { supabaseService } from "@/lib/services/supabaseService";
 
 export default function OwnerBookingsPage() {
-  const { bookings } = useBookings();
+  const { bookings, refresh } = useBookings();
   const currentUser = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
@@ -196,9 +196,9 @@ export default function OwnerBookingsPage() {
       </div>
       
       {isMobile || isTablet ? (
-        <MobileBookingsTable bookings={paginatedBookings} />
+        <MobileBookingsTable bookings={paginatedBookings} onRefresh={refresh} />
       ) : (
-        <BookingsTable bookings={paginatedBookings} />
+        <BookingsTable bookings={paginatedBookings} onRefresh={refresh} />
       )}
 
       {totalPages > 1 && (

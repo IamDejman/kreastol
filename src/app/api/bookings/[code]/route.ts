@@ -23,6 +23,7 @@ interface DbBooking {
   payment_method: string | null;
   payment_reference: string | null;
   payment_date: string | null;
+  hold_expires_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,7 @@ function dbBookingToBooking(dbBooking: DbBooking): Booking {
     paymentMethod: (dbBooking.payment_method as Booking["paymentMethod"]) ?? undefined,
     paymentReference: dbBooking.payment_reference,
     paymentDate: dbBooking.payment_date,
+    holdExpiresAt: dbBooking.hold_expires_at ?? null,
     createdAt: dbBooking.created_at,
     updatedAt: dbBooking.updated_at,
   };
@@ -166,6 +168,8 @@ export async function PATCH(
     if (updates.paymentReference !== undefined)
       updateData.payment_reference = updates.paymentReference;
     if (updates.paymentDate !== undefined) updateData.payment_date = updates.paymentDate;
+    if (updates.holdExpiresAt !== undefined)
+      updateData.hold_expires_at = updates.holdExpiresAt ?? null;
 
     const { error } = await supabase
       .from("bookings")
@@ -181,7 +185,8 @@ export async function PATCH(
     }
 
     if (actor) {
-      // Build a concise description of what changed for the audit log
+      // Build a concise, human-readable description of what changed for the audit log.
+      // Put the field changes first so they're immediately visible on small screens.
       let context = params.code;
 
       if (existingBooking) {
@@ -226,9 +231,11 @@ export async function PATCH(
         describeChange("paymentMethod", "method");
         describeChange("paymentReference", "ref");
         describeChange("paymentDate", "paid_at");
+        describeChange("holdExpiresAt", "hold_expires");
 
         if (changes.length > 0) {
-          context = `${params.code}: ${changes.join(", ")}`;
+          // Example: "status unpaid → paid, method transfer → card [BK-20260127-QEW8]"
+          context = `${changes.join(", ")} [${params.code}]`;
         }
       }
 

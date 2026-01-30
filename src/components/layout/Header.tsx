@@ -43,6 +43,17 @@ export function Header() {
                 Guests
               </Link>
               <Link
+                href="/owner/users"
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  pathname.startsWith("/owner/users")
+                    ? "text-primary"
+                    : "text-gray-600 hover:text-primary"
+                )}
+              >
+                Users
+              </Link>
+              <Link
                 href="/owner/audit-log"
                 className={cn(
                   "text-sm font-medium transition-colors",

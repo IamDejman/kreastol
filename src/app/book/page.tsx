@@ -81,7 +81,9 @@ function BookPageContent() {
         <h1 className="font-heading text-2xl font-semibold text-primary">
           Complete your booking
         </h1>
-        <p className="mt-2 text-gray-600">Enter your details to confirm.</p>
+        <p className="mt-2 text-gray-600">
+          Enter your details below. After submitting, you will see the bank account to pay and must send your payment receipt to the phone number shown so we can confirm your reservation within 30 minutes.
+        </p>
         <div className="mt-8 space-y-6">
           <BookingSummary selection={selection} />
           <BookingForm

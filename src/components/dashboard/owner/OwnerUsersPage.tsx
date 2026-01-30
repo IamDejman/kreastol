@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Check, X } from "lucide-react";
 import type { User } from "@/types";
 import { supabaseService } from "@/lib/services/supabaseService";
 import { useAuthStore } from "@/store/authStore";
@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/Input";
 interface EditFormState {
   id: string;
   name: string;
-  password: string;
+  email: string;
 }
 
 export function OwnerUsersPage() {
@@ -30,6 +30,7 @@ export function OwnerUsersPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createEmail, setCreateEmail] = useState("");
+  const [createRole, setCreateRole] = useState<User["role"]>("receptionist");
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
@@ -39,7 +40,8 @@ export function OwnerUsersPage() {
     setError(null);
     try {
       const allUsers = await supabaseService.getUsers();
-      setUsers(allUsers.filter((u) => u.role === "receptionist"));
+      // Show all users (owners and receptionists)
+      setUsers(allUsers);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load users";
       setError(message);
@@ -77,6 +79,7 @@ export function OwnerUsersPage() {
   const resetCreateForm = () => {
     setCreateName("");
     setCreateEmail("");
+    setCreateRole("receptionist");
   };
 
   const handleCreate = async () => {
@@ -90,7 +93,7 @@ export function OwnerUsersPage() {
       const userPayload = {
         name: createName.trim(),
         email: createEmail.trim(),
-        role: "receptionist" as const,
+        role: createRole,
         status: "active" as const,
         dbId: "",
       };
@@ -107,7 +110,7 @@ export function OwnerUsersPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create receptionist");
+        throw new Error(data.error || "Failed to create user");
       }
 
       const created = data.user as User;
@@ -121,7 +124,7 @@ export function OwnerUsersPage() {
       setIsCreateOpen(false);
       resetCreateForm();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to create receptionist";
+      const message = err instanceof Error ? err.message : "Failed to create user";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -132,7 +135,7 @@ export function OwnerUsersPage() {
     setEditForm({
       id: user.dbId,
       name: user.name,
-      password: "",
+      email: user.email,
     });
     setIsEditOpen(true);
   };
@@ -142,9 +145,9 @@ export function OwnerUsersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const updates: { name?: string; password?: string } = {};
+      const updates: { name?: string; email?: string } = {};
       if (editForm.name.trim()) updates.name = editForm.name.trim();
-      if (editForm.password.trim()) updates.password = editForm.password;
+      if (editForm.email.trim()) updates.email = editForm.email.trim();
 
       const body = currentUser
         ? { user: updates, actor: { id: currentUser.dbId, name: currentUser.name, role: currentUser.role } }
@@ -158,7 +161,7 @@ export function OwnerUsersPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Failed to update receptionist");
+        throw new Error(data.error || "Failed to update user");
       }
 
       const updated = data.user as User;
@@ -166,7 +169,7 @@ export function OwnerUsersPage() {
       setIsEditOpen(false);
       setEditForm(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update receptionist";
+      const message = err instanceof Error ? err.message : "Failed to update user";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -209,10 +212,10 @@ export function OwnerUsersPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl font-semibold text-primary">
-            Team
+            Users
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            Manage receptionists for this property.
+            Manage all users for this property.
           </p>
         </div>
         <Button
@@ -221,7 +224,7 @@ export function OwnerUsersPage() {
           disabled={isLoading}
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add receptionist
+          Add user
         </Button>
       </div>
 
@@ -287,11 +290,21 @@ export function OwnerUsersPage() {
                     </Button>
                     <Button
                       size="xs"
-                      variant={user.status === "active" ? "outline" : "secondary"}
+                      variant={user.status === "active" ? "secondary" : "success"}
                       onClick={() => toggleStatus(user)}
                       disabled={isLoading}
                     >
-                      {user.status === "active" ? "Disable" : "Enable"}
+                      {user.status === "active" ? (
+                        <>
+                          <X className="h-3 w-3 text-red-500" />
+                          <span className="sr-only">Disable</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-3 w-3 text-green-500" />
+                          <span className="sr-only">Enable</span>
+                        </>
+                      )}
                     </Button>
                   </td>
                 </tr>
@@ -315,9 +328,9 @@ export function OwnerUsersPage() {
           setIsCreateOpen(false);
           resetCreateForm();
         }}
-        title="Add receptionist"
+        title="Add user"
       >
-        <div className="space-y-4">
+        <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
           <Input
             label="Name"
             value={createName}
@@ -329,10 +342,24 @@ export function OwnerUsersPage() {
             value={createEmail}
             onChange={(e) => setCreateEmail(e.target.value)}
           />
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">
+              Role
+            </label>
+            <select
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              value={createRole}
+              onChange={(e) => setCreateRole(e.target.value as User["role"])}
+            >
+              <option value="owner">Owner</option>
+              <option value="receptionist">Receptionist</option>
+            </select>
+          </div>
+          <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
             <Button
               variant="secondary"
               type="button"
+              className="w-full sm:w-auto"
               onClick={() => {
                 setIsCreateOpen(false);
                 resetCreateForm();
@@ -340,7 +367,12 @@ export function OwnerUsersPage() {
             >
               Cancel
             </Button>
-            <Button type="button" onClick={handleCreate} disabled={isLoading}>
+            <Button
+              type="button"
+              onClick={handleCreate}
+              disabled={isLoading}
+              className="w-full sm:w-auto"
+            >
               Save
             </Button>
           </div>
@@ -353,10 +385,10 @@ export function OwnerUsersPage() {
           setIsEditOpen(false);
           setEditForm(null);
         }}
-        title="Edit receptionist"
+        title="Edit user"
       >
         {editForm && (
-          <div className="space-y-4">
+          <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
             <Input
               label="Name"
               value={editForm.name}
@@ -367,19 +399,20 @@ export function OwnerUsersPage() {
               }
             />
             <Input
-              label="New password (optional)"
-              type="password"
-              value={editForm.password}
+              label="Email"
+              type="email"
+              value={editForm.email}
               onChange={(e) =>
                 setEditForm((prev) =>
-                  prev ? { ...prev, password: e.target.value } : prev
+                  prev ? { ...prev, email: e.target.value } : prev
                 )
               }
             />
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
               <Button
                 variant="secondary"
                 type="button"
+                className="w-full sm:w-auto"
                 onClick={() => {
                   setIsEditOpen(false);
                   setEditForm(null);
@@ -391,6 +424,7 @@ export function OwnerUsersPage() {
                 type="button"
                 onClick={handleEditSave}
                 disabled={isLoading}
+                className="w-full sm:w-auto"
               >
                 Save changes
               </Button>

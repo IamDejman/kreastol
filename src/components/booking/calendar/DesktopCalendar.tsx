@@ -37,6 +37,33 @@ function formatOrdinalDate(date: Date): string {
   return `${day}`;
 }
 
+// Helper: calculate revenue for a single day across all bookings
+function calculateDailyRevenue(dateStr: string, bookings: Booking[]): number {
+  const date = parseISO(dateStr);
+
+  return bookings.reduce((sum, booking) => {
+    const checkIn = parseISO(booking.checkIn);
+    const checkOut = parseISO(booking.checkOut);
+
+    // Include check-in date, exclude check-out date
+    const isInStay = date >= checkIn && date < checkOut;
+    if (!isInStay) return sum;
+
+    const nightlyRate =
+      booking.nights > 0 ? booking.totalAmount / booking.nights : 0;
+
+    return sum + nightlyRate;
+  }, 0);
+}
+
+// Helper: calculate total revenue for the entire month
+function calculateTotalRevenue(allDays: Date[], bookings: Booking[]): number {
+  return allDays.reduce((sum, day) => {
+    const dateStr = format(day, "yyyy-MM-dd");
+    return sum + calculateDailyRevenue(dateStr, bookings);
+  }, 0);
+}
+
 interface DesktopCalendarProps {
   onDateSelect: (selection: DateSelection) => void;
   /**
@@ -216,19 +243,19 @@ export function DesktopCalendar({
     
     const roomDates = bookedDates[roomNumber] ?? [];
     
-    // Past: always show details only, never select
+    // Past: staff can open booking details; customers see nothing
     if (date < today) {
       const booking = findBookingForDate(roomNumber, date);
-      if (booking) setSelectedBooking(booking);
+      if (booking && isStaff) setSelectedBooking(booking);
       return;
     }
 
-    // Booked: show details unless we're picking check-out and this is a valid check-out (we leave that morning)
+    // Booked: staff can open details; customers see nothing. Unless we're picking check-out and this is valid.
     if (roomDates.includes(date)) {
       const validCheckout = selectingRoom === roomNumber && !!checkIn && date > checkIn && isValidCheckoutOption(roomNumber, date);
       if (!validCheckout) {
         const booking = findBookingForDate(roomNumber, date);
-        if (booking) setSelectedBooking(booking);
+        if (booking && isStaff) setSelectedBooking(booking);
         return;
       }
       // valid check-out on a booked day — fall through to check-out logic
@@ -516,7 +543,9 @@ export function DesktopCalendar({
   };
 
   const gridWidth =
-    MIN_DAY_ROW_WIDTH + ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH + REVENUE_COLUMN_WIDTH;
+    MIN_DAY_ROW_WIDTH +
+    ROOM_CONFIG.rooms.length * ROOM_COLUMN_WIDTH +
+    REVENUE_COLUMN_WIDTH;
 
   // UI helpers for week selection and scrolling
   const isTodayInWeek = (week: { start: Date; end: Date }) =>
@@ -574,13 +603,14 @@ export function DesktopCalendar({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm w-fit">
       {/* Header with month nav */}
-      <div 
-        className="flex items-center justify-between border-b border-gray-200 py-4 relative"
+      <div
+        className="border-b border-gray-200 px-6 pt-4 pb-2"
         style={{ width: gridWidth }}
       >
-        <div className="flex items-center gap-3 px-6">
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setBase((b) => subMonths(b, 1))}
@@ -601,7 +631,7 @@ export function DesktopCalendar({
               />
             </svg>
           </button>
-          <h3 className="min-w-[180px] text-center font-heading text-xl font-semibold text-foreground">
+          <h3 className="flex-1 text-center font-heading text-xl font-semibold text-foreground">
             {format(base, "MMMM yyyy")}
           </h3>
           <button
@@ -625,10 +655,7 @@ export function DesktopCalendar({
             </svg>
           </button>
         </div>
-        <div 
-          className="flex items-center gap-4 text-xs text-gray-500 px-6"
-          style={{ position: 'absolute', right: 0 }}
-        >
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3 text-xs text-gray-500">
           <span className="flex items-center gap-2">
             <span className="h-4 w-4 rounded border border-gray-300 bg-green-100" />
             Available
@@ -642,7 +669,7 @@ export function DesktopCalendar({
             Blocked
           </span>
           <span className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded border border-gray-300 bg-primary/15" />
+            <span className="h-4 w-4 rounded border border-gray-300 bg-primary" />
             Selected
           </span>
         </div>
@@ -675,7 +702,7 @@ export function DesktopCalendar({
           }}
         >
           {/* Top-left corner */}
-          <div className="sticky left-0 top-0 z-20 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-50">
+          <div className="sticky left-0 top-0 z-30 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-white">
             <span className="text-sm font-medium text-foreground">DAY</span>
           </div>
 
@@ -683,7 +710,7 @@ export function DesktopCalendar({
           {ROOM_CONFIG.rooms.map((room) => (
             <div
               key={room.number}
-              className="sticky top-0 z-10 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4"
+              className="sticky top-0 z-20 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-white px-4"
             >
               <span className="font-medium text-foreground">{room.name}</span>
               <span className="text-xs text-gray-500">
@@ -691,9 +718,9 @@ export function DesktopCalendar({
               </span>
             </div>
           ))}
-          
+
           {/* Revenue header */}
-          <div className="sticky top-0 z-10 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-gray-50 px-4">
+          <div className="sticky top-0 z-20 flex h-12 flex-col justify-center border-b border-r border-gray-200 bg-white px-4">
             <span className="font-medium text-foreground">Revenue</span>
             <span className="text-xs text-gray-500">Daily</span>
           </div>
@@ -712,7 +739,7 @@ export function DesktopCalendar({
                 {/* Day label */}
                 <div
                   className={cn(
-                    "sticky left-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-white px-3",
+                    "sticky left-0 z-20 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-white px-3",
                     isLastRow && "border-b-0"
                   )}
                   ref={isAnchorDay ? weekAnchorRef : undefined}
@@ -733,7 +760,7 @@ export function DesktopCalendar({
                 </div>
 
                 {/* Room cells for this day */}
-                {ROOM_CONFIG.rooms.map((room) => {
+                  {ROOM_CONFIG.rooms.map((room) => {
                   const status = getStatus(room.number, dateStr);
                   const bookingPos = getBookingPosition(room.number, dateStr);
                   const isCheckIn =
@@ -794,26 +821,26 @@ export function DesktopCalendar({
                         (status === "selecting" ||
                           status === "selected" ||
                           isInRange) &&
-                          "bg-primary/15 text-primary border-primary/40",
+                          "bg-primary text-white border-primary",
                         inHover &&
                           !isCheckIn &&
                           !isHoverEnd &&
                           "bg-primary/10 text-primary border-primary/30",
                         isHoverEnd &&
-                          "bg-primary/20 text-primary border-primary/40 rounded-b-md",
-                        isCheckIn && "rounded-t-md bg-primary/20",
-                        isCheckOut && "rounded-b-md bg-primary/20"
+                          "bg-primary text-white border-primary rounded-b-md",
+                        isCheckIn && "rounded-t-md bg-primary",
+                        isCheckOut && "rounded-b-md bg-primary"
                       )}
                     >
-                      {/* Booking code indicator for multi-night bookings */}
-                      {status === "booked" && bookingPos.booking && bookingPos.isCheckIn && (
+                      {/* Booking code indicator for multi-night bookings (staff only) */}
+                      {status === "booked" && bookingPos.booking && bookingPos.isCheckIn && isStaff && (
                         <div className="absolute top-0.5 left-0.5 px-1 py-0.5 bg-primary/20 rounded text-[8px] font-mono font-semibold text-primary leading-none z-10">
                           {bookingPos.booking.bookingCode.slice(-4)}
                         </div>
                       )}
-                      
-                      {/* Payment status indicator for booked cells */}
-                      {status === "booked" && bookingPos.booking && (
+
+                      {/* Payment status indicator for booked cells (staff only) */}
+                      {status === "booked" && bookingPos.booking && isStaff && (
                         <div className="absolute top-1 right-1 z-10">
                           <div
                             className={cn(
@@ -853,23 +880,21 @@ export function DesktopCalendar({
           
           {/* Total Revenue Row (sticky at bottom) */}
           <>
-            {/* Total label */}
-            <div className="sticky left-0 bottom-0 z-20 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
-              <span className="text-sm font-semibold text-foreground">
-                TOTAL
-              </span>
+            {/* Total label in DAY column */}
+            <div className="sticky left-0 bottom-0 z-20 flex h-12 items-center justify-center border-t border-r border-gray-200 bg-gray-100 px-3">
+              <span className="text-sm font-bold text-foreground">Total</span>
             </div>
-            
+
             {/* Empty cells for rooms */}
             {ROOM_CONFIG.rooms.map((room) => (
               <div
                 key={room.number}
-                className="sticky bottom-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100"
+                className="sticky bottom-0 z-10 flex h-12 items-center justify-center border-t border-r border-gray-200 bg-gray-100"
               />
             ))}
-            
-            {/* Total revenue cell */}
-            <div className="sticky bottom-0 z-10 flex h-12 items-center justify-center border-b border-r border-gray-200 bg-gray-100 px-3">
+
+            {/* Total revenue value in Revenue column */}
+            <div className="sticky bottom-0 z-10 flex h-12 items-center justify-center border-t border-r border-gray-200 bg-gray-100 px-3">
               <span className="text-sm font-bold text-foreground">
                 ₦{getTotalRevenue().toLocaleString(undefined, {
                   minimumFractionDigits: 0,
@@ -880,55 +905,6 @@ export function DesktopCalendar({
           </>
         </div>
       </div>
-
-      <div 
-        className="border-t border-gray-200 px-6 py-3"
-        style={{ width: gridWidth }}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-          <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
-            {weeks.map((week) => {
-              const label = `${format(week.start, "d")}-${format(week.end, "d")}`;
-              const isActive =
-                viewMode === "week" &&
-                activeWeek &&
-                week.key === activeWeek.key;
-              const isCurrent = isTodayInWeek(week);
-              return (
-                <button
-                  key={week.key}
-                  type="button"
-                  onClick={() => {
-                    setViewMode("week");
-                    setSelectedWeekKey(week.key);
-                  }}
-                  className={cn(
-                    "px-2.5 py-1 text-xs rounded-full border transition-colors whitespace-nowrap",
-                    isActive
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
-                    isCurrent && "font-semibold"
-                  )}
-                >
-                  {label}
-                  {isCurrent && " (This week)"}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setViewMode("all")}
-              className={cn(
-                "px-2.5 py-1 text-xs rounded-full border transition-colors whitespace-nowrap",
-                viewMode === "all"
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-              )}
-            >
-              View all days
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Booking Details Modal */}
@@ -1210,6 +1186,51 @@ export function DesktopCalendar({
           </div>
         )}
       </Modal>
+      <div
+        className="mt-3 flex flex-wrap gap-2 justify-end text-xs text-gray-600"
+        style={{ width: gridWidth }}
+      >
+      {weeks.map((week) => {
+        const label = `${format(week.start, "d")}-${format(week.end, "d")}`;
+        const isActive =
+          viewMode === "week" &&
+          activeWeek &&
+          week.key === activeWeek.key;
+        const isCurrent = isTodayInWeek(week);
+        return (
+          <button
+            key={week.key}
+            type="button"
+            onClick={() => {
+              setViewMode("week");
+              setSelectedWeekKey(week.key);
+            }}
+            className={cn(
+              "px-2.5 py-1 text-xs rounded-full border transition-colors whitespace-nowrap",
+              isActive
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+              isCurrent && "font-semibold"
+            )}
+          >
+            {label}
+            {isCurrent && " (This week)"}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        onClick={() => setViewMode("all")}
+        className={cn(
+          "px-2.5 py-1 text-xs rounded-full border transition-colors whitespace-nowrap",
+          viewMode === "all"
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+        )}
+      >
+        View all days
+      </button>
+      </div>
     </div>
   );
 }
